@@ -1,6 +1,7 @@
 """
 DescribeAI - Backend con Groq API (GRATIS)
 Genera descripciones de productos con Llama 3.3
+Envío de emails con Resend
 Deploy en Railway
 """
 
@@ -11,13 +12,9 @@ from fastapi.responses import FileResponse
 from groq import Groq
 import pandas as pd
 import io
-import smtplib
-import time
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email.mime.text import MIMEText
-from email import encoders
+import base64
 import os
+import resend
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -34,9 +31,10 @@ app.add_middleware(
 async def root():
     return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
 
-GROQ_KEY   = os.getenv("GROQ_API_KEY")       # Ya tenés esta key del bot!
-GMAIL_USER = os.getenv("GMAIL_USER")
-GMAIL_PASS = os.getenv("GMAIL_APP_PASSWORD")
+GROQ_KEY = os.getenv("GROQ_API_KEY")
+resend.api_key = os.getenv("RESEND_API_KEY")
+
+FROM_EMAIL = "DescribeAI <onboarding@resend.dev>"
 
 
 def generar_descripcion(producto: dict, tono: str, idioma: str) -> str:
@@ -99,45 +97,49 @@ def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: s
 
 
 def enviar_csv(email_destino: str, tienda: str, csv_bytes: bytes):
-    """Envía el CSV procesado por email."""
-    msg = MIMEMultipart()
-    msg['From']    = GMAIL_USER
-    msg['To']      = email_destino
-    msg['Subject'] = f"✅ DescribeAI — Tus descripciones para {tienda} están listas"
+    """Envía el CSV procesado por email usando Resend."""
+    csv_base64 = base64.b64encode(csv_bytes).decode("utf-8")
 
-    body = MIMEText(f"""
-Hola,
+    html = f"""
+    <div style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto;">
+      <h2>✅ Tus descripciones están listas</h2>
+      <p>Hola,</p>
+      <p>Adjunto encontrás el CSV con la columna <strong>descripcion_generada</strong>
+      para tu tienda <strong>{tienda}</strong>.</p>
+      <p>Solo copiá y pegá cada descripción en tu tienda.</p>
+      <p>Gracias por usar DescribeAI 🚀</p>
+    </div>
+    """
 
-Tus descripciones están listas. Encontrás el CSV adjunto con la columna 'descripcion_generada'.
-
-Solo copiá y pegá cada descripción en tu tienda.
-
-Gracias por usar DescribeAI 🚀
-    """, 'plain')
-    msg.attach(body)
-
-    adjunto = MIMEBase('application', 'octet-stream')
-    adjunto.set_payload(csv_bytes)
-    encoders.encode_base64(adjunto)
-    adjunto.add_header('Content-Disposition', f'attachment; filename="descripciones_{tienda}.csv"')
-    msg.attach(adjunto)
-
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(GMAIL_USER, GMAIL_PASS)
-        server.sendmail(GMAIL_USER, email_destino, msg.as_string())
+    resend.Emails.send({
+        "from": FROM_EMAIL,
+        "to": email_destino,
+        "subject": f"✅ DescribeAI — Tus descripciones para {tienda} están listas",
+        "html": html,
+        "attachments": [{
+            "filename": f"descripciones_{tienda}.csv",
+            "content": csv_base64,
+        }],
+    })
 
 
 def enviar_error(email_destino: str, error: str):
     """Notifica al cliente si algo falló."""
-    msg = MIMEMultipart()
-    msg['From']    = GMAIL_USER
-    msg['To']      = email_destino
-    msg['Subject'] = "DescribeAI — Hubo un problema con tu pedido"
-    body = MIMEText(f"Ocurrió un error: {error}\nPor favor contactanos.", 'plain')
-    msg.attach(body)
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(GMAIL_USER, GMAIL_PASS)
-        server.sendmail(GMAIL_USER, email_destino, msg.as_string())
+    html = f"""
+    <div style="font-family: -apple-system, sans-serif;">
+      <h2>❌ Hubo un problema con tu pedido</h2>
+      <p>Ocurrió un error procesando tu archivo:</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;">{error}</pre>
+      <p>Por favor contactanos.</p>
+    </div>
+    """
+
+    resend.Emails.send({
+        "from": FROM_EMAIL,
+        "to": email_destino,
+        "subject": "DescribeAI — Hubo un problema con tu pedido",
+        "html": html,
+    })
 
 
 @app.post("/procesar")

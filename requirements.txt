@@ -3,3 +3,4 @@ uvicorn
 groq
 pandas
 python-multipart
+resend
