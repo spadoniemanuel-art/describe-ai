@@ -19,6 +19,8 @@ from email.mime.text import MIMEText
 from email import encoders
 import os
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 app = FastAPI()
 
 app.add_middleware(
@@ -30,7 +32,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
 
 GROQ_KEY   = os.getenv("GROQ_API_KEY")       # Ya tenés esta key del bot!
 GMAIL_USER = os.getenv("GMAIL_USER")
