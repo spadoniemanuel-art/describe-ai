@@ -7,6 +7,7 @@ Deploy en Railway
 from fastapi import FastAPI, UploadFile, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from groq import Groq
 import pandas as pd
 import io
@@ -27,7 +28,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+@app.get("/")
+async def root():
+    return FileResponse("static/index.html")
 
 GROQ_KEY   = os.getenv("GROQ_API_KEY")       # Ya tenés esta key del bot!
 GMAIL_USER = os.getenv("GMAIL_USER")
