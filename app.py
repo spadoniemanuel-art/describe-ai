@@ -86,7 +86,7 @@ def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: s
 
         # Guardar CSV resultado
         output = io.BytesIO()
-        df.to_csv(output, index=False, encoding='utf-8-sig')
+        df.to_csv(output, index=False, encoding='utf-8-sig', errors='replace')
         output.seek(0)
 
         # Enviar por email
