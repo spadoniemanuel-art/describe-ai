@@ -55,7 +55,8 @@ Reglas ESTRICTAS:
 - Solo usá la info que te di, no inventes nada
 - Incluí 2 beneficios clave
 - Terminá con una frase de acción sutil
-- Respondé SOLO con la descripción, sin explicaciones"""
+- Respondé SOLO con la descripción, sin explicaciones
+- Muy importante: no uses tildes ni caracteres especiales, escribí todo sin acentos"""
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
