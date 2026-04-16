@@ -38,25 +38,22 @@ FROM_EMAIL = "DescribeAI <onboarding@resend.dev>"
 
 
 def generar_descripcion(producto: dict, tono: str, idioma: str) -> str:
-    """Llama a Groq API para generar una descripción."""
     client = Groq(api_key=GROQ_KEY)
-
     prompt = f"""Sos un copywriter experto en eCommerce.
-Generá UNA descripción de producto atractiva, optimizada para SEO, en tono {tono}.
+Genera una descripcion de producto atractiva en tono {tono}.
 Idioma: {idioma}
 
 Producto:
 - Nombre: {producto.get('nombre', '')}
-- Categoría: {producto.get('categoria', '')}
-- Características: {producto.get('caracteristicas', '')}
+- Categoria: {producto.get('categoria', '')}
+- Caracteristicas: {producto.get('caracteristicas', '')}
 
 Reglas ESTRICTAS:
-- Máximo 100 palabras
-- Solo usá la info que te di, no inventes nada
-- Incluí 2 beneficios clave
-- Terminá con una frase de acción sutil
-- Respondé SOLO con la descripción, sin explicaciones
-- Muy importante: no uses tildes ni caracteres especiales, escribí todo sin acentos"""
+- Maximo 100 palabras
+- Solo usa la info dada, no inventes nada
+- Sin tildes, sin acentos, sin caracteres especiales
+- Usa unicamente letras a-z, numeros y puntuacion basica
+- Solo la descripcion, sin titulos ni explicaciones"""
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -64,9 +61,7 @@ Reglas ESTRICTAS:
         max_tokens=200,
         temperature=0.7
     )
-
-    texto = response.choices[0].message.content.strip()
-    return texto.encode('latin-1', errors='ignore').decode('utf-8', errors='ignore')
+    return response.choices[0].message.content.strip()
 
 
 def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: str):
