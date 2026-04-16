@@ -14,6 +14,7 @@ import pandas as pd
 import io
 import base64
 import os
+import time
 import resend
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -53,15 +54,22 @@ Reglas ESTRICTAS:
 - Solo usa la info dada, no inventes nada
 - Sin tildes, sin acentos, sin caracteres especiales
 - Usa unicamente letras a-z, numeros y puntuacion basica
-- Solo la descripcion, sin titulos ni explicaciones"""
+- Solo la descripcion, sin titulos ni explicaciones
+- Envolvé las palabras clave importantes del producto en etiquetas <b>"""
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=200,
-        temperature=0.7
-    )
-    return response.choices[0].message.content.strip()
+    for intento in range(3):
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                temperature=0.7
+            )
+            return response.choices[0].message.content.strip()
+        except Exception:
+            if intento < 2:
+                time.sleep(3)
+    return "Error: no se pudo generar la descripcion"
 
 
 def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: str):
@@ -73,6 +81,10 @@ def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: s
         if 'nombre' not in df.columns:
             enviar_error(email, "El CSV no tiene una columna 'nombre'")
             return
+
+        # Eliminar filas donde 'nombre' esté vacío
+        df = df.dropna(subset=['nombre'])
+        df = df[df['nombre'].str.strip() != '']
 
         descripciones = []
         for _, row in df.iterrows():
