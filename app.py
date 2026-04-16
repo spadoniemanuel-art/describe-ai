@@ -64,7 +64,8 @@ Reglas ESTRICTAS:
         temperature=0.7
     )
 
-    return response.choices[0].message.content.strip()
+    texto = response.choices[0].message.content.strip()
+    return texto.encode('latin-1', errors='ignore').decode('utf-8', errors='ignore')
 
 
 def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: str):
