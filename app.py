@@ -7,8 +7,10 @@ Deploy en Railway
 
 from fastapi import FastAPI, UploadFile, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from groq import Groq
 import pandas as pd
 import io
@@ -20,6 +22,9 @@ import resend
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI()
+
+# Respeta X-Forwarded-Proto de Railway para que las URLs internas usen https://
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 app.add_middleware(
     CORSMiddleware,
