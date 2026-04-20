@@ -6,11 +6,11 @@ Sistema de códigos de acceso con SQLite
 Deploy en Railway
 """
 
-from fastapi import FastAPI, UploadFile, Form, BackgroundTasks, HTTPException
+from fastapi import FastAPI, UploadFile, Form, BackgroundTasks, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from groq import Groq
 import pandas as pd
@@ -20,6 +20,7 @@ import os
 import time
 import sqlite3
 import uuid
+import secrets
 import resend
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -82,9 +83,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-GROQ_KEY = os.getenv("GROQ_API_KEY")
+GROQ_KEY       = os.getenv("GROQ_API_KEY")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 resend.api_key = os.getenv("RESEND_API_KEY")
-FROM_EMAIL = "DescribeAI <onboarding@resend.dev>"
+FROM_EMAIL     = "DescribeAI <onboarding@resend.dev>"
+
+# Sesiones en memoria: set de tokens válidos
+admin_sessions: set = set()
 
 
 # ---------- Endpoints ----------
@@ -92,9 +97,38 @@ FROM_EMAIL = "DescribeAI <onboarding@resend.dev>"
 async def root():
     return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
 
+
 @app.get("/admin")
-async def admin():
-    return FileResponse(os.path.join(BASE_DIR, "static", "admin.html"))
+async def admin(request: Request):
+    token = request.cookies.get("admin_session")
+    if token and token in admin_sessions:
+        return FileResponse(os.path.join(BASE_DIR, "static", "admin.html"))
+    return FileResponse(os.path.join(BASE_DIR, "static", "login.html"))
+
+
+@app.post("/admin/login")
+async def admin_login(response: Response, password: str = Form(...)):
+    if password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Contraseña incorrecta")
+    token = secrets.token_urlsafe(32)
+    admin_sessions.add(token)
+    response.set_cookie(
+        key="admin_session",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7,   # 7 días
+    )
+    return {"status": "ok"}
+
+
+@app.post("/admin/logout")
+async def admin_logout(request: Request, response: Response):
+    token = request.cookies.get("admin_session")
+    if token:
+        admin_sessions.discard(token)
+    response.delete_cookie("admin_session")
+    return RedirectResponse("/admin", status_code=302)
 
 
 @app.get("/generate-code")

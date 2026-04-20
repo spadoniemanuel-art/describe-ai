@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DescribeAI — Admin Login</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f13;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: #1a1a22;
+      border: 1px solid #2a2a36;
+      border-radius: 16px;
+      padding: 40px;
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    h1 { color: #fff; font-size: 1.4rem; font-weight: 700; }
+    p  { color: #555; font-size: 0.85rem; }
+    input[type="password"] {
+      width: 100%;
+      padding: 14px 16px;
+      background: #0f0f13;
+      border: 2px solid #2a2a36;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="password"]:focus { border-color: #8b2be2; }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #5a1a8a, #8b2be2);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(139,43,226,0.4); }
+    .error {
+      color: #f87171;
+      font-size: 0.85rem;
+      text-align: center;
+      display: none;
+    }
+    .error.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div>
+      <h1>🔐 Panel Admin</h1>
+      <p>DescribeAI — Acceso restringido</p>
+    </div>
+    <form id="loginForm" onsubmit="login(event)">
+      <input type="password" id="password" placeholder="Contraseña" required autofocus />
+    </form>
+    <button onclick="login(event)">Entrar</button>
+    <p class="error" id="errorMsg">Contraseña incorrecta</p>
+  </div>
+
+  <script>
+    // Si viene con ?error=1 mostrar mensaje
+    if (new URLSearchParams(location.search).get('error')) {
+      document.getElementById('errorMsg').classList.add('visible');
+    }
+
+    async function login(e) {
+      e.preventDefault();
+      const pass = document.getElementById('password').value;
+      const form = new FormData();
+      form.append('password', pass);
+
+      const res = await fetch('/admin/login', { method: 'POST', body: form });
+      if (res.ok) {
+        window.location.href = '/admin';
+      } else {
+        document.getElementById('errorMsg').classList.add('visible');
+        document.getElementById('password').value = '';
+        document.getElementById('password').focus();
+      }
+    }
+  </script>
+</body>
+</html>
