@@ -128,6 +128,16 @@
         </div>
       </div>
 
+      <label for="access_code">Código de acceso</label>
+      <input
+        type="text"
+        id="access_code"
+        name="access_code"
+        placeholder="Ej: BASIC-A1B2C3"
+        required
+        style="text-transform:uppercase; letter-spacing:1px;"
+      />
+
       <button type="submit" id="submitBtn">Generar descripciones</button>
     </form>
 
@@ -150,6 +160,7 @@
       data.append('storeName', document.getElementById('storeName').value);
       data.append('tone', document.getElementById('tone').value);
       data.append('lang', document.getElementById('lang').value);
+      data.append('access_code', document.getElementById('access_code').value.trim().toUpperCase());
 
       btn.disabled = true;
       btn.textContent = 'Enviando...';
