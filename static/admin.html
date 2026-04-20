@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DescribeAI — Panel de Códigos</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f13;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 20px;
+      color: #e0e0e0;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 0.85rem;
+      margin-bottom: 48px;
+    }
+
+    .buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .btn {
+      padding: 18px 24px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: transform 0.1s, box-shadow 0.2s, opacity 0.2s;
+      letter-spacing: 0.3px;
+    }
+
+    .btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-basic    { background: linear-gradient(135deg, #1a7a4a, #25a85f); color: #fff; }
+    .btn-standard { background: linear-gradient(135deg, #1a4a8a, #2563d4); color: #fff; }
+    .btn-premium  { background: linear-gradient(135deg, #5a1a8a, #8b2be2); color: #fff; }
+
+    .btn .label { display: flex; align-items: center; gap: 10px; }
+    .btn .limit { font-size: 0.75rem; font-weight: 500; opacity: 0.8; }
+
+    /* Result card */
+    .result {
+      margin-top: 40px;
+      width: 100%;
+      max-width: 420px;
+      background: #1a1a22;
+      border: 1px solid #2a2a36;
+      border-radius: 16px;
+      padding: 28px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .result.visible { display: flex; }
+
+    .result-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #666;
+    }
+
+    .code-display {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: 3px;
+      color: #fff;
+      text-align: center;
+      word-break: break-all;
+    }
+
+    .code-display.basic    { color: #25a85f; }
+    .code-display.standard { color: #4a8fff; }
+    .code-display.premium  { color: #a855f7; }
+
+    .btn-copy {
+      padding: 12px 32px;
+      background: #2a2a36;
+      color: #fff;
+      border: 1px solid #3a3a50;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      width: 100%;
+    }
+
+    .btn-copy:hover { background: #35354a; transform: translateY(-1px); }
+
+    .copied-msg {
+      font-size: 0.82rem;
+      color: #25a85f;
+      font-weight: 600;
+      height: 18px;
+      transition: opacity 0.3s;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-msg {
+      margin-top: 16px;
+      color: #f87171;
+      font-size: 0.85rem;
+      text-align: center;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>DescribeAI — Panel de Códigos</h1>
+  <p class="subtitle">Generá códigos de acceso para tus clientes</p>
+
+  <div class="buttons">
+    <button class="btn btn-basic" onclick="generar('basic')">
+      <span class="label">🟢 CÓDIGO BASIC</span>
+      <span class="limit">Hasta 50 productos</span>
+    </button>
+    <button class="btn btn-standard" onclick="generar('standard')">
+      <span class="label">🔵 CÓDIGO STANDARD</span>
+      <span class="limit">Hasta 200 productos</span>
+    </button>
+    <button class="btn btn-premium" onclick="generar('premium')">
+      <span class="label">🟣 CÓDIGO PREMIUM</span>
+      <span class="limit">Hasta 1000 productos</span>
+    </button>
+  </div>
+
+  <div class="result" id="result">
+    <p class="result-label" id="resultLabel">Código generado</p>
+    <div class="code-display" id="codeDisplay">—</div>
+    <button class="btn-copy" id="copyBtn" onclick="copiar()">📋 COPIAR CÓDIGO</button>
+    <p class="copied-msg" id="copiedMsg"></p>
+  </div>
+
+  <div class="spinner" id="spinner"></div>
+  <p class="error-msg" id="errorMsg"></p>
+
+  <script>
+    const allBtns = document.querySelectorAll('.btn');
+
+    async function generar(type) {
+      const result     = document.getElementById('result');
+      const display    = document.getElementById('codeDisplay');
+      const label      = document.getElementById('resultLabel');
+      const spinner    = document.getElementById('spinner');
+      const errorMsg   = document.getElementById('errorMsg');
+      const copiedMsg  = document.getElementById('copiedMsg');
+
+      // Reset
+      result.classList.remove('visible');
+      errorMsg.style.display = 'none';
+      copiedMsg.textContent  = '';
+      spinner.style.display  = 'block';
+      allBtns.forEach(b => b.disabled = true);
+
+      try {
+        const res = await fetch(`/generate-code?type=${type}`);
+        if (!res.ok) throw new Error('Error del servidor: ' + res.status);
+        const data = await res.json();
+
+        display.textContent = data.code;
+        display.className   = `code-display ${type}`;
+        label.textContent   = `Código ${type.toUpperCase()} — ${data.limit} productos`;
+
+        result.classList.add('visible');
+      } catch (err) {
+        errorMsg.textContent    = '❌ ' + err.message;
+        errorMsg.style.display  = 'block';
+      } finally {
+        spinner.style.display = 'none';
+        allBtns.forEach(b => b.disabled = false);
+      }
+    }
+
+    async function copiar() {
+      const code      = document.getElementById('codeDisplay').textContent;
+      const copiedMsg = document.getElementById('copiedMsg');
+      const copyBtn   = document.getElementById('copyBtn');
+
+      try {
+        await navigator.clipboard.writeText(code);
+        copiedMsg.textContent = '✅ ¡Código copiado al portapapeles!';
+        copyBtn.textContent   = '✔ COPIADO';
+        setTimeout(() => {
+          copiedMsg.textContent = '';
+          copyBtn.textContent   = '📋 COPIAR CÓDIGO';
+        }, 2500);
+      } catch {
+        copiedMsg.textContent = '⚠ Copiá manualmente: ' + code;
+      }
+    }
+  </script>
+
+</body>
+</html>

@@ -92,6 +92,10 @@ FROM_EMAIL = "DescribeAI <onboarding@resend.dev>"
 async def root():
     return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
 
+@app.get("/admin")
+async def admin():
+    return FileResponse(os.path.join(BASE_DIR, "static", "admin.html"))
+
 
 @app.get("/generate-code")
 async def generate_code(type: str = "basic"):
