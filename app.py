@@ -1,18 +1,15 @@
 """
-DescribeAI - Backend con Groq API (GRATIS)
-Genera descripciones de productos con Llama 3.3
-Envío de emails con Resend
-Sistema de códigos de acceso con SQLite
+DescribeAI SaaS — Backend
+Groq API (Llama 3) + MercadoPago Checkout Pro + Resend + SQLite
 Deploy en Railway
 """
 
 from fastapi import FastAPI, UploadFile, Form, BackgroundTasks, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from groq import Groq
+import mercadopago
 import pandas as pd
 import io
 import base64
@@ -26,20 +23,26 @@ import resend
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH  = os.path.join(BASE_DIR, "codes.db")
 
-# ---------- Límites por tipo de código ----------
-LIMITES = {
-    "basic":    50,
-    "standard": 200,
-    "premium":  1000,
-}
+# ── Config ────────────────────────────────────────────────────────────────────
+GROQ_KEY        = os.getenv("GROQ_API_KEY")
+ADMIN_PASSWORD  = os.getenv("ADMIN_PASSWORD", "admin123")
+MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
+SITE_URL        = os.getenv("SITE_URL", "https://describeai.store")
+resend.api_key  = os.getenv("RESEND_API_KEY")
+FROM_EMAIL      = "DescribeAI <onboarding@resend.dev>"
 
-PREFIJOS = {
-    "basic":    "BASIC",
-    "standard": "STD",
-    "premium":  "PREM",
-}
+sdk = mercadopago.SDK(MP_ACCESS_TOKEN)
 
-# ---------- Base de datos ----------
+# ── Planes ─────────────────────────────────────────────────────────────────────
+PLANES = {
+    "basic":    {"nombre": "Inicial",     "productos": 50,   "precio": 5000,  "code_type": "basic"},
+    "standard": {"nombre": "Crecimiento", "productos": 200,  "precio": 15000, "code_type": "standard"},
+    "premium":  {"nombre": "Corporativo", "productos": 1000, "precio": 35000, "code_type": "premium"},
+}
+LIMITES  = {"basic": 50, "standard": 200, "premium": 1000}
+PREFIJOS = {"basic": "BASIC", "standard": "STD", "premium": "PREM"}
+
+# ── Base de datos ──────────────────────────────────────────────────────────────
 def init_db():
     con = sqlite3.connect(DB_PATH)
     con.execute("""
@@ -48,6 +51,16 @@ def init_db():
             type       TEXT NOT NULL,
             used       INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS payments (
+            reference_id TEXT PRIMARY KEY,
+            plan         TEXT NOT NULL,
+            payment_id   TEXT,
+            code         TEXT,
+            status       TEXT NOT NULL DEFAULT 'pending',
+            created_at   TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
     con.commit()
@@ -60,7 +73,7 @@ def get_code(code: str):
     con = sqlite3.connect(DB_PATH)
     row = con.execute("SELECT code, type, used FROM codes WHERE code = ?", (code,)).fetchone()
     con.close()
-    return row  # (code, type, used) o None
+    return row
 
 
 def mark_used(code: str):
@@ -70,32 +83,33 @@ def mark_used(code: str):
     con.close()
 
 
-# ---------- App ----------
+def create_access_code(plan: str) -> str:
+    code_type = PLANES[plan]["code_type"]
+    code = f"{PREFIJOS[code_type]}-{uuid.uuid4().hex[:6].upper()}"
+    con = sqlite3.connect(DB_PATH)
+    con.execute("INSERT INTO codes (code, type) VALUES (?, ?)", (code, code_type))
+    con.commit()
+    con.close()
+    return code
+
+
+# ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI()
-
-# Respeta X-Forwarded-Proto de Railway para que las URLs internas usen https://
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-GROQ_KEY       = os.getenv("GROQ_API_KEY")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-resend.api_key = os.getenv("RESEND_API_KEY")
-FROM_EMAIL     = "DescribeAI <onboarding@resend.dev>"
-
-# Sesiones en memoria: set de tokens válidos
 admin_sessions: set = set()
 
 
-# ---------- Endpoints ----------
+# ── Páginas estáticas ──────────────────────────────────────────────────────────
 @app.get("/")
 async def root():
     return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
+
+
+@app.get("/success")
+async def success_page():
+    return FileResponse(os.path.join(BASE_DIR, "static", "success.html"))
 
 
 @app.get("/admin")
@@ -112,13 +126,7 @@ async def admin_login(response: Response, password: str = Form(...)):
         raise HTTPException(status_code=401, detail="Contraseña incorrecta")
     token = secrets.token_urlsafe(32)
     admin_sessions.add(token)
-    response.set_cookie(
-        key="admin_session",
-        value=token,
-        httponly=True,
-        samesite="lax",
-        max_age=60 * 60 * 24 * 7,   # 7 días
-    )
+    response.set_cookie(key="admin_session", value=token, httponly=True, samesite="lax", max_age=60*60*24*7)
     return {"status": "ok"}
 
 
@@ -131,28 +139,120 @@ async def admin_logout(request: Request, response: Response):
     return RedirectResponse("/admin", status_code=302)
 
 
+# ── MercadoPago ────────────────────────────────────────────────────────────────
+@app.post("/create-preference")
+async def create_preference(plan: str = Form(...)):
+    if plan not in PLANES:
+        raise HTTPException(400, detail="Plan inválido")
+
+    p   = PLANES[plan]
+    ref = str(uuid.uuid4())
+
+    con = sqlite3.connect(DB_PATH)
+    con.execute("INSERT INTO payments (reference_id, plan) VALUES (?, ?)", (ref, plan))
+    con.commit()
+    con.close()
+
+    result = sdk.preference().create({
+        "items": [{
+            "title":      f"DescribeAI — Plan {p['nombre']} ({p['productos']} productos)",
+            "quantity":   1,
+            "unit_price": float(p["precio"]),
+            "currency_id": "ARS",
+        }],
+        "external_reference": ref,
+        "back_urls": {
+            "success": f"{SITE_URL}/success?ref={ref}",
+            "failure": f"{SITE_URL}/?error=1",
+            "pending": f"{SITE_URL}/success?ref={ref}",
+        },
+        "auto_return":       "approved",
+        "notification_url":  f"{SITE_URL}/webhook",
+        "statement_descriptor": "DESCRIBEAI",
+    })
+
+    if result["status"] != 201:
+        raise HTTPException(500, detail="Error creando preferencia de pago")
+
+    return {"init_point": result["response"]["init_point"], "reference": ref}
+
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    payment_id = (body.get("data") or {}).get("id") or request.query_params.get("id")
+    topic      = body.get("type") or request.query_params.get("topic") or request.query_params.get("type")
+
+    if topic not in ("payment",) and str(topic) != "payment":
+        return {"status": "ignored", "topic": topic}
+
+    if not payment_id:
+        return {"status": "no_payment_id"}
+
+    info = sdk.payment().get(payment_id)
+    if info["status"] != 200:
+        return {"status": "error_fetching_payment"}
+
+    payment  = info["response"]
+    p_status = payment.get("status")
+    ref      = payment.get("external_reference")
+
+    if p_status != "approved" or not ref:
+        return {"status": "not_approved", "payment_status": p_status}
+
+    con = sqlite3.connect(DB_PATH)
+    row = con.execute("SELECT status, plan FROM payments WHERE reference_id = ?", (ref,)).fetchone()
+
+    if not row:
+        con.close()
+        return {"status": "reference_not_found"}
+
+    if row[0] == "approved":
+        con.close()
+        return {"status": "already_processed"}
+
+    code = create_access_code(row[1])
+    con.execute(
+        "UPDATE payments SET status='approved', payment_id=?, code=? WHERE reference_id=?",
+        (str(payment_id), code, ref)
+    )
+    con.commit()
+    con.close()
+
+    return {"status": "ok", "code": code}
+
+
+@app.get("/api/check-payment")
+async def check_payment(ref: str):
+    con = sqlite3.connect(DB_PATH)
+    row = con.execute("SELECT status, code, plan FROM payments WHERE reference_id=?", (ref,)).fetchone()
+    con.close()
+    if not row:
+        raise HTTPException(404, detail="Referencia no encontrada")
+    status, code, plan = row
+    return {"status": status, "code": code, "plan": plan}
+
+
+# ── Código manual (admin) ──────────────────────────────────────────────────────
 @app.get("/generate-code")
 async def generate_code(type: str = "basic"):
     type = type.lower()
     if type not in LIMITES:
         raise HTTPException(400, detail=f"Tipo inválido. Usá: {', '.join(LIMITES.keys())}")
-
     prefijo = PREFIJOS[type]
-    sufijo  = uuid.uuid4().hex[:6].upper()
-    code    = f"{prefijo}-{sufijo}"
-
+    code    = f"{prefijo}-{uuid.uuid4().hex[:6].upper()}"
     con = sqlite3.connect(DB_PATH)
     con.execute("INSERT INTO codes (code, type) VALUES (?, ?)", (code, type))
     con.commit()
     con.close()
-
-    return {
-        "code":  code,
-        "type":  type,
-        "limit": LIMITES[type],
-    }
+    return {"code": code, "type": type, "limit": LIMITES[type]}
 
 
+# ── Procesar CSV ───────────────────────────────────────────────────────────────
 @app.post("/procesar")
 async def procesar(
     background_tasks: BackgroundTasks,
@@ -163,7 +263,6 @@ async def procesar(
     lang:        str = Form("es"),
     access_code: str = Form(...),
 ):
-    # --- Validar código ---
     code_upper = access_code.strip().upper()
     row = get_code(code_upper)
 
@@ -171,15 +270,12 @@ async def procesar(
         raise HTTPException(400, detail="Código inválido. Verificá que sea correcto.")
 
     _, code_type, used = row
-
     if used:
         raise HTTPException(400, detail="Este código ya fue usado. Cada código es de un solo uso.")
 
-    limite = LIMITES[code_type]
-
-    # --- Validar cantidad de productos ---
+    limite    = LIMITES[code_type]
     contenido = await file.read()
-    df = pd.read_csv(io.BytesIO(contenido))
+    df        = pd.read_csv(io.BytesIO(contenido))
     df.columns = [c.lower().strip() for c in df.columns]
 
     if 'nombre' not in df.columns:
@@ -189,15 +285,14 @@ async def procesar(
     df = df[df['nombre'].str.strip() != '']
 
     if len(df) > limite:
-        raise HTTPException(400, detail=f"Tu plan {code_type} permite hasta {limite} productos. Tu CSV tiene {len(df)}.")
+        raise HTTPException(400, detail=f"Tu plan permite hasta {limite} productos. Tu CSV tiene {len(df)}.")
 
-    # --- Marcar como usado y procesar ---
     mark_used(code_upper)
     background_tasks.add_task(procesar_csv, contenido, email, storeName, tone, lang)
     return {"status": "ok", "message": f"Procesando {len(df)} productos. Te llega por email en minutos."}
 
 
-# ---------- Lógica de procesamiento ----------
+# ── Generación con Groq ────────────────────────────────────────────────────────
 def generar_descripcion(producto: dict, tono: str, idioma: str) -> str:
     client = Groq(api_key=GROQ_KEY)
     prompt = f"""Sos un copywriter experto en eCommerce.
@@ -223,7 +318,7 @@ Reglas ESTRICTAS:
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=200,
-                temperature=0.7
+                temperature=0.7,
             )
             return response.choices[0].message.content.strip()
         except Exception:
@@ -233,71 +328,52 @@ Reglas ESTRICTAS:
 
 
 def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: str):
-    """Procesa el CSV completo y envía el resultado por email."""
     try:
         df = pd.read_csv(io.BytesIO(contenido))
         df.columns = [c.lower().strip() for c in df.columns]
         df = df.dropna(subset=['nombre'])
         df = df[df['nombre'].str.strip() != '']
 
-        descripciones = []
-        for _, row in df.iterrows():
-            desc = generar_descripcion(row.to_dict(), tono, idioma)
-            descripciones.append(desc)
-
-        df['descripcion_generada'] = descripciones
+        df['descripcion_generada'] = [
+            generar_descripcion(row.to_dict(), tono, idioma)
+            for _, row in df.iterrows()
+        ]
 
         output = io.BytesIO()
         df.to_csv(output, index=False, encoding='utf-8-sig', errors='replace')
         output.seek(0)
-
         enviar_csv(email, tienda, output.read())
-
     except Exception as e:
         enviar_error(email, str(e))
 
 
 def enviar_csv(email_destino: str, tienda: str, csv_bytes: bytes):
-    """Envía el CSV procesado por email usando Resend."""
     csv_base64 = base64.b64encode(csv_bytes).decode("utf-8")
-
-    html = f"""
-    <div style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto;">
-      <h2>✅ Tus descripciones están listas</h2>
-      <p>Hola,</p>
-      <p>Adjunto encontrás el CSV con la columna <strong>descripcion_generada</strong>
-      para tu tienda <strong>{tienda}</strong>.</p>
-      <p>Solo copiá y pegá cada descripción en tu tienda.</p>
-      <p>Gracias por usar DescribeAI 🚀</p>
-    </div>
-    """
-
     resend.Emails.send({
         "from": FROM_EMAIL,
-        "to": email_destino,
+        "to":   email_destino,
         "subject": f"✅ DescribeAI — Tus descripciones para {tienda} están listas",
-        "html": html,
-        "attachments": [{
-            "filename": f"descripciones_{tienda}.csv",
-            "content": csv_base64,
-        }],
+        "html": f"""
+        <div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;">
+          <h2>✅ Tus descripciones están listas</h2>
+          <p>Adjunto encontrás el CSV con la columna <strong>descripcion_generada</strong>
+          para tu tienda <strong>{tienda}</strong>.</p>
+          <p>Solo copiá y pegá cada descripción en tu tienda.</p>
+          <p>Gracias por usar DescribeAI 🚀</p>
+        </div>""",
+        "attachments": [{"filename": f"descripciones_{tienda}.csv", "content": csv_base64}],
     })
 
 
 def enviar_error(email_destino: str, error: str):
-    """Notifica al cliente si algo falló."""
-    html = f"""
-    <div style="font-family: -apple-system, sans-serif;">
-      <h2>❌ Hubo un problema con tu pedido</h2>
-      <p>Ocurrió un error procesando tu archivo:</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;">{error}</pre>
-      <p>Por favor contactanos.</p>
-    </div>
-    """
-
     resend.Emails.send({
         "from": FROM_EMAIL,
-        "to": email_destino,
+        "to":   email_destino,
         "subject": "DescribeAI — Hubo un problema con tu pedido",
-        "html": html,
+        "html": f"""
+        <div style="font-family:-apple-system,sans-serif;">
+          <h2>❌ Hubo un problema con tu pedido</h2>
+          <pre style="background:#f5f5f5;padding:10px;border-radius:6px;">{error}</pre>
+          <p>Por favor contactanos.</p>
+        </div>""",
     })

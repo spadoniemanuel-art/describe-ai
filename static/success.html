@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DescribeAI — Pago exitoso</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #07071a; }
+    .gradient-text {
+      background: linear-gradient(135deg, #4f8ef7 0%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .code-box {
+      font-family: 'Courier New', monospace;
+      letter-spacing: 4px;
+      font-size: 2rem;
+      font-weight: 900;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    .fade-in { animation: fadeIn 0.5s ease forwards; }
+  </style>
+</head>
+<body class="text-gray-100 font-sans antialiased min-h-screen flex items-center justify-center px-4 py-16">
+
+  <!-- Estado: cargando -->
+  <div id="stateLoading" class="text-center">
+    <div class="w-14 h-14 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-6"></div>
+    <p class="text-white font-semibold text-lg">Verificando tu pago...</p>
+    <p class="text-gray-500 text-sm mt-2">Esto puede tardar unos segundos</p>
+  </div>
+
+  <!-- Estado: éxito -->
+  <div id="stateSuccess" class="hidden fade-in max-w-lg w-full">
+    <div class="bg-white/[0.04] border border-white/10 rounded-3xl p-10 text-center">
+      <div class="w-20 h-20 bg-green-500/15 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">✅</div>
+
+      <h1 class="text-3xl font-black mb-2">¡Pago exitoso!</h1>
+      <p class="text-gray-400 mb-8">Tu código de acceso está listo. Guardalo antes de cerrar esta página.</p>
+
+      <!-- Código -->
+      <div class="bg-[#07071a] border-2 border-blue-500/30 rounded-2xl p-6 mb-4">
+        <p class="text-xs text-blue-400 font-bold uppercase tracking-widest mb-3">Tu código de acceso</p>
+        <div id="codeDisplay" class="code-box gradient-text mb-4">—</div>
+        <p id="planLabel" class="text-xs text-gray-500"></p>
+      </div>
+
+      <button onclick="copiar()" id="copyBtn"
+        class="w-full bg-blue-600 hover:bg-blue-500 transition text-white font-bold py-3.5 rounded-xl mb-8">
+        📋 Copiar código
+      </button>
+      <p id="copiedMsg" class="text-green-400 text-sm font-semibold mb-6 hidden">✅ ¡Código copiado al portapapeles!</p>
+
+      <!-- Instrucciones -->
+      <div class="bg-white/[0.03] border border-white/8 rounded-2xl p-6 text-left space-y-3">
+        <p class="text-sm font-bold text-white mb-4">📋 Cómo usar tu código:</p>
+        <div class="flex gap-3 text-sm text-gray-400">
+          <span class="text-blue-400 font-bold flex-shrink-0">1.</span>
+          <span>Preparás tu archivo CSV con las columnas: <code class="text-blue-300">nombre, categoria, caracteristicas</code></span>
+        </div>
+        <div class="flex gap-3 text-sm text-gray-400">
+          <span class="text-blue-400 font-bold flex-shrink-0">2.</span>
+          <span>Vas a la sección <a href="/#usar" class="text-blue-400 underline">Subir CSV</a> en la página principal</span>
+        </div>
+        <div class="flex gap-3 text-sm text-gray-400">
+          <span class="text-blue-400 font-bold flex-shrink-0">3.</span>
+          <span>Completás el formulario con tu email, subís el CSV y pegás el código</span>
+        </div>
+        <div class="flex gap-3 text-sm text-gray-400">
+          <span class="text-blue-400 font-bold flex-shrink-0">4.</span>
+          <span>Recibís las descripciones en tu email en minutos 🚀</span>
+        </div>
+      </div>
+
+      <a href="/#usar" class="mt-8 inline-block w-full bg-white/5 hover:bg-white/10 border border-white/10 transition text-white font-semibold py-3.5 rounded-xl">
+        Ir al formulario →
+      </a>
+    </div>
+  </div>
+
+  <!-- Estado: pendiente -->
+  <div id="statePending" class="hidden fade-in max-w-lg w-full text-center">
+    <div class="bg-white/[0.04] border border-white/10 rounded-3xl p-10">
+      <div class="text-5xl mb-5">⏳</div>
+      <h2 class="text-2xl font-black mb-3">Pago en proceso</h2>
+      <p class="text-gray-400 mb-6">Mercado Pago está confirmando tu pago. Esto puede tardar 1-2 minutos.<br/>Esta página se actualiza sola.</p>
+      <div class="w-8 h-8 border-4 border-yellow-500/30 border-t-yellow-500 rounded-full animate-spin mx-auto"></div>
+    </div>
+  </div>
+
+  <!-- Estado: error -->
+  <div id="stateError" class="hidden fade-in max-w-lg w-full text-center">
+    <div class="bg-white/[0.04] border border-red-500/20 rounded-3xl p-10">
+      <div class="text-5xl mb-5">❌</div>
+      <h2 class="text-2xl font-black mb-3">No encontramos tu pago</h2>
+      <p class="text-gray-400 mb-8">Si realizaste el pago y seguís viendo esto, contactanos.</p>
+      <a href="/" class="inline-block btn-electric text-white font-bold px-8 py-4 rounded-xl">
+        Volver al inicio
+      </a>
+    </div>
+  </div>
+
+  <script>
+    const PLANES_LABEL = {
+      basic:    "Plan Inicial — hasta 50 productos",
+      standard: "Plan Crecimiento — hasta 200 productos",
+      premium:  "Plan Corporativo — hasta 1.000 productos",
+    };
+
+    const ref = new URLSearchParams(location.search).get('ref');
+    let pollCount = 0;
+
+    function show(state) {
+      ['Loading','Success','Pending','Error'].forEach(s =>
+        document.getElementById('state' + s).classList.add('hidden')
+      );
+      document.getElementById('state' + state).classList.remove('hidden');
+    }
+
+    async function checkPayment() {
+      if (!ref) { show('Error'); return; }
+
+      try {
+        const res  = await fetch(`/api/check-payment?ref=${ref}`);
+        if (!res.ok) { show('Error'); return; }
+        const data = await res.json();
+
+        if (data.status === 'approved' && data.code) {
+          document.getElementById('codeDisplay').textContent = data.code;
+          document.getElementById('planLabel').textContent   = PLANES_LABEL[data.plan] || data.plan;
+          show('Success');
+        } else if (pollCount < 20) {
+          pollCount++;
+          show('Pending');
+          setTimeout(checkPayment, 4000);   // reintenta cada 4 segundos
+        } else {
+          show('Error');
+        }
+      } catch {
+        if (pollCount < 20) {
+          pollCount++;
+          setTimeout(checkPayment, 4000);
+        } else {
+          show('Error');
+        }
+      }
+    }
+
+    async function copiar() {
+      const code = document.getElementById('codeDisplay').textContent;
+      const msg  = document.getElementById('copiedMsg');
+      const btn  = document.getElementById('copyBtn');
+      try {
+        await navigator.clipboard.writeText(code);
+        msg.classList.remove('hidden');
+        btn.textContent = '✔ Copiado';
+        setTimeout(() => { msg.classList.add('hidden'); btn.textContent = '📋 Copiar código'; }, 3000);
+      } catch {
+        alert('Copiá manualmente: ' + code);
+      }
+    }
+
+    checkPayment();
+  </script>
+</body>
+</html>
