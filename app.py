@@ -29,7 +29,8 @@ ADMIN_PASSWORD  = os.getenv("ADMIN_PASSWORD", "admin123")
 MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
 SITE_URL        = os.getenv("SITE_URL", "https://describeai.store")
 resend.api_key  = os.getenv("RESEND_API_KEY")
-FROM_EMAIL      = "DescribeAI <onboarding@resend.dev>"
+FROM_EMAIL      = "DescribeAI <soporte@describeai.store>"
+REPLY_TO        = "spadoni.emanuel@gmail.com"
 
 sdk = mercadopago.SDK(MP_ACCESS_TOKEN)
 
@@ -350,9 +351,10 @@ def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: s
 def enviar_csv(email_destino: str, tienda: str, csv_bytes: bytes):
     csv_base64 = base64.b64encode(csv_bytes).decode("utf-8")
     resend.Emails.send({
-        "from": FROM_EMAIL,
-        "to":   email_destino,
-        "subject": f"✅ DescribeAI — Tus descripciones para {tienda} están listas",
+        "from":     FROM_EMAIL,
+        "to":       email_destino,
+        "reply_to": REPLY_TO,
+        "subject":  f"✅ DescribeAI — Tus descripciones para {tienda} están listas",
         "html": f"""
         <div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;">
           <h2>✅ Tus descripciones están listas</h2>
@@ -367,9 +369,10 @@ def enviar_csv(email_destino: str, tienda: str, csv_bytes: bytes):
 
 def enviar_error(email_destino: str, error: str):
     resend.Emails.send({
-        "from": FROM_EMAIL,
-        "to":   email_destino,
-        "subject": "DescribeAI — Hubo un problema con tu pedido",
+        "from":     FROM_EMAIL,
+        "to":       email_destino,
+        "reply_to": REPLY_TO,
+        "subject":  "DescribeAI — Hubo un problema con tu pedido",
         "html": f"""
         <div style="font-family:-apple-system,sans-serif;">
           <h2>❌ Hubo un problema con tu pedido</h2>
