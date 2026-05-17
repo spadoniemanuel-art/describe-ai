@@ -450,12 +450,17 @@
         const form = new FormData();
         form.append('plan', plan);
         const res  = await fetch('/create-preference', { method: 'POST', body: form });
-        if (!res.ok) throw new Error();
         const data = await res.json();
-        window.location.href = data.init_point;
-      } catch {
+        if (!res.ok) throw new Error(data.detail || 'Error del servidor');
+
+        // Usar mobile_init_point en dispositivos móviles para mejor compatibilidad
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const url = isMobile ? data.mobile_init_point : data.init_point;
+        window.location.href = url;
+      } catch (err) {
         loader.classList.add('hidden');
         errEl.classList.remove('hidden');
+        errEl.textContent = '❌ ' + (err.message || 'Error al conectar con el servidor de pagos');
       }
     }
 

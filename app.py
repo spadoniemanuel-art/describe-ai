@@ -32,7 +32,11 @@ resend.api_key  = os.getenv("RESEND_API_KEY")
 FROM_EMAIL      = "DescribeAI <soporte@describeai.store>"
 REPLY_TO        = "spadoni.emanuel@gmail.com"
 
-sdk = mercadopago.SDK(MP_ACCESS_TOKEN)
+def get_sdk():
+    token = os.getenv("MP_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(500, detail="MP_ACCESS_TOKEN no configurado en Railway")
+    return mercadopago.SDK(token)
 
 # ── Planes ─────────────────────────────────────────────────────────────────────
 PLANES = {
@@ -146,6 +150,7 @@ async def create_preference(plan: str = Form(...)):
     if plan not in PLANES:
         raise HTTPException(400, detail="Plan inválido")
 
+    sdk = get_sdk()
     p   = PLANES[plan]
     ref = str(uuid.uuid4())
 
@@ -156,9 +161,9 @@ async def create_preference(plan: str = Form(...)):
 
     result = sdk.preference().create({
         "items": [{
-            "title":      f"DescribeAI — Plan {p['nombre']} ({p['productos']} productos)",
-            "quantity":   1,
-            "unit_price": float(p["precio"]),
+            "title":       f"DescribeAI — Plan {p['nombre']} ({p['productos']} productos)",
+            "quantity":    1,
+            "unit_price":  float(p["precio"]),
             "currency_id": "ARS",
         }],
         "external_reference": ref,
@@ -167,15 +172,24 @@ async def create_preference(plan: str = Form(...)):
             "failure": f"{SITE_URL}/?error=1",
             "pending": f"{SITE_URL}/success?ref={ref}",
         },
-        "auto_return":       "approved",
-        "notification_url":  f"{SITE_URL}/webhook",
+        "auto_return":          "approved",
+        "notification_url":     f"{SITE_URL}/webhook",
         "statement_descriptor": "DESCRIBEAI",
     })
 
-    if result["status"] != 201:
-        raise HTTPException(500, detail="Error creando preferencia de pago")
+    # Loguear respuesta completa para debugging
+    print(f"[MP] status={result['status']} response={result['response']}")
 
-    return {"init_point": result["response"]["init_point"], "reference": ref}
+    if result["status"] != 201:
+        mp_error = result.get("response", {})
+        raise HTTPException(500, detail=f"MP error {result['status']}: {mp_error}")
+
+    resp = result["response"]
+    return {
+        "init_point":        resp["init_point"],
+        "mobile_init_point": resp.get("mobile_init_point", resp["init_point"]),
+        "reference":         ref,
+    }
 
 
 @app.post("/webhook")
