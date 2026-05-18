@@ -208,7 +208,7 @@ async def webhook(request: Request):
     if not payment_id:
         return {"status": "no_payment_id"}
 
-    info = sdk.payment().get(payment_id)
+    info = get_sdk().payment().get(payment_id)
     if info["status"] != 200:
         return {"status": "error_fetching_payment"}
 
