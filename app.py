@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from groq import Groq
+import groq as groq_lib
 import mercadopago
 import pandas as pd
 import io
@@ -18,7 +19,22 @@ import time
 import sqlite3
 import uuid
 import secrets
+import threading
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import resend
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+)
+logger = logging.getLogger("describeai")
+
+# ── Concurrencia Groq ──────────────────────────────────────────────────────────
+# Máximo 5 llamadas simultáneas a Groq en todo el proceso (global entre jobs)
+GROQ_SEMAPHORE   = threading.Semaphore(5)
+GROQ_MAX_WORKERS = 5   # hilos por job de CSV
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH  = os.path.join(BASE_DIR, "codes.db")
@@ -183,8 +199,7 @@ async def create_preference(plan: str = Form(...)):
         "statement_descriptor": "DESCRIBEAI",
     })
 
-    # Loguear respuesta completa para debugging
-    print(f"[MP] status={result['status']} response={result['response']}")
+    logger.info(f"[MP] status={result['status']} response={result['response']}")
 
     if result["status"] != 201:
         mp_error = result.get("response", {})
@@ -271,9 +286,9 @@ async def webhook(request: Request):
                 </div>""",
             })
         except Exception as e:
-            print(f"[EMAIL] Error enviando código a {buyer_email}: {e}")
+            logger.error(f"[EMAIL] Error enviando código a {buyer_email}: {e}")
 
-    print(f"[WEBHOOK] Pago aprobado ref={ref} plan={plan} email={buyer_email} code={code}")
+    logger.info(f"[WEBHOOK] Pago aprobado ref={ref} plan={plan} email={buyer_email} code={code}")
     return {"status": "ok", "code": code}
 
 
@@ -356,8 +371,13 @@ async def procesar(
 
 # ── Generación con Groq ────────────────────────────────────────────────────────
 def generar_descripcion(producto: dict, tono: str, idioma: str) -> str:
-    client = Groq(api_key=GROQ_KEY)
-    prompt = f"""Sos un copywriter experto en eCommerce.
+    """
+    Llama a Groq con semáforo global y exponential backoff en Rate Limit (429).
+    Intentos: hasta 4. Esperas: 2s → 4s → 8s → 16s.
+    """
+    nombre  = producto.get('nombre', '(sin nombre)')
+    client  = Groq(api_key=GROQ_KEY)
+    prompt  = f"""Sos un copywriter experto en eCommerce.
 Genera una descripcion de producto atractiva en tono {tono}.
 Idioma: {idioma}
 
@@ -374,38 +394,93 @@ Reglas ESTRICTAS:
 - Envolvé las palabras clave importantes del producto en etiquetas <b>
 - Solo la descripcion, sin titulos ni explicaciones"""
 
-    for intento in range(3):
+    MAX_INTENTOS = 4
+
+    for intento in range(MAX_INTENTOS):
         try:
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,
-                temperature=0.7,
+            logger.info(f"[GROQ] Adquiriendo semáforo para '{nombre}' (intento {intento + 1}/{MAX_INTENTOS})")
+            with GROQ_SEMAPHORE:
+                logger.info(f"[GROQ] Semáforo adquirido — llamando API para '{nombre}'")
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=200,
+                    temperature=0.7,
+                )
+            result = response.choices[0].message.content.strip()
+            logger.info(f"[GROQ] Éxito para '{nombre}' en intento {intento + 1}")
+            return result
+
+        except groq_lib.RateLimitError:
+            wait = 2 ** (intento + 1)   # 2, 4, 8, 16
+            logger.warning(
+                f"[GROQ] Rate limit (429) para '{nombre}' — intento {intento + 1}/{MAX_INTENTOS}. "
+                f"Reintentando en {wait}s con exponential backoff..."
             )
-            return response.choices[0].message.content.strip()
-        except Exception:
-            if intento < 2:
-                time.sleep(3)
+            if intento < MAX_INTENTOS - 1:
+                time.sleep(wait)
+
+        except Exception as exc:
+            wait = 2 ** intento          # 1, 2, 4, 8
+            logger.warning(
+                f"[GROQ] Error inesperado para '{nombre}' — intento {intento + 1}/{MAX_INTENTOS}: {exc}. "
+                f"Reintentando en {wait}s..."
+            )
+            if intento < MAX_INTENTOS - 1:
+                time.sleep(wait)
+
+    logger.error(f"[GROQ] Falló tras {MAX_INTENTOS} intentos para '{nombre}'. Devolviendo placeholder.")
     return "Error: no se pudo generar la descripcion"
 
 
 def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: str):
+    """
+    Procesa el CSV con ThreadPoolExecutor (hasta GROQ_MAX_WORKERS filas en paralelo).
+    El GROQ_SEMAPHORE limita las llamadas simultáneas reales a Groq globalmente.
+    """
     try:
         df = pd.read_csv(io.BytesIO(contenido))
         df.columns = [c.lower().strip() for c in df.columns]
         df = df.dropna(subset=['nombre'])
         df = df[df['nombre'].str.strip() != '']
 
-        df['descripcion_generada'] = [
-            generar_descripcion(row.to_dict(), tono, idioma)
-            for _, row in df.iterrows()
-        ]
+        total = len(df)
+        logger.info(f"[CSV] Iniciando procesamiento de {total} productos para {email} | tienda={tienda}")
+
+        rows         = [row.to_dict() for _, row in df.iterrows()]
+        descripciones = [None] * total
+        completados   = 0
+
+        def _procesar_fila(args: tuple) -> tuple:
+            idx, producto = args
+            return idx, generar_descripcion(producto, tono, idioma)
+
+        with ThreadPoolExecutor(max_workers=GROQ_MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(_procesar_fila, (i, row)): i
+                for i, row in enumerate(rows)
+            }
+            for future in as_completed(futures):
+                try:
+                    idx, desc = future.result()
+                    descripciones[idx] = desc
+                    completados += 1
+                    logger.info(f"[CSV] Progreso: {completados}/{total} para {email}")
+                except Exception as exc:
+                    logger.error(f"[CSV] Error en fila {futures[future]}: {exc}")
+                    descripciones[futures[future]] = "Error: no se pudo generar la descripcion"
+                    completados += 1
+
+        df['descripcion_generada'] = descripciones
 
         output = io.BytesIO()
         df.to_csv(output, index=False, encoding='utf-8-sig', errors='replace')
         output.seek(0)
         enviar_csv(email, tienda, output.read())
+        logger.info(f"[CSV] Email enviado a {email} con {total} descripciones completadas")
+
     except Exception as e:
+        logger.error(f"[CSV] Error crítico procesando CSV para {email}: {e}")
         enviar_error(email, str(e))
 
 
