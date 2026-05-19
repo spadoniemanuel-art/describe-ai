@@ -318,6 +318,117 @@ async def generate_code(type: str = "basic"):
     return {"code": code, "type": type, "limit": LIMITES[type]}
 
 
+# ── Validación de CSV ──────────────────────────────────────────────────────────
+# Aliases aceptados para la columna principal (se normalizan a 'nombre')
+ALIAS_NOMBRE = {"nombre", "nombre_producto", "product", "product_name", "name", "producto", "titulo", "title"}
+COLUMNAS_OPCIONALES_ALIAS = {
+    "categoria":       {"categoria", "category", "tipo", "type"},
+    "caracteristicas": {"caracteristicas", "caracteristica", "features", "descripcion", "description", "detalles", "details"},
+}
+MAX_BYTES = 5 * 1024 * 1024   # 5 MB
+EXTENSIONES_VALIDAS = {".csv", ".txt"}
+
+
+def validar_csv(contenido: bytes, filename: str, limite: int, email: str) -> pd.DataFrame:
+    """
+    Valida y normaliza el CSV. Lanza HTTPException 400 con mensaje amigable ante cualquier problema.
+    Retorna el DataFrame limpio listo para procesar.
+    """
+    # 1 — Extensión del archivo
+    ext = os.path.splitext(filename or "")[-1].lower()
+    if ext not in EXTENSIONES_VALIDAS:
+        logger.warning(f"[VALIDAR] {email} subió archivo con extensión inválida: '{ext}'")
+        raise HTTPException(
+            400,
+            detail=f"Tipo de archivo no permitido ('{ext}'). Solo se aceptan archivos .csv."
+        )
+
+    # 2 — Tamaño
+    if len(contenido) == 0:
+        logger.warning(f"[VALIDAR] {email} subió un archivo vacío.")
+        raise HTTPException(400, detail="El archivo está vacío. Por favor subí un CSV con productos.")
+
+    if len(contenido) > MAX_BYTES:
+        mb = len(contenido) / 1024 / 1024
+        logger.warning(f"[VALIDAR] {email} superó el límite de tamaño: {mb:.1f} MB")
+        raise HTTPException(400, detail=f"El archivo pesa {mb:.1f} MB. El máximo permitido es 5 MB.")
+
+    # 3 — Parseo
+    try:
+        df = pd.read_csv(io.BytesIO(contenido))
+    except Exception as exc:
+        logger.warning(f"[VALIDAR] {email} subió un CSV que no se pudo parsear: {exc}")
+        raise HTTPException(
+            400,
+            detail="No se pudo leer el archivo. Asegurate de que sea un CSV válido exportado desde Excel o Google Sheets."
+        )
+
+    if df.empty or len(df.columns) == 0:
+        logger.warning(f"[VALIDAR] {email} subió un CSV sin columnas detectables.")
+        raise HTTPException(400, detail="El CSV no tiene columnas reconocibles. Revisá que el archivo no esté vacío o mal formateado.")
+
+    # 4 — Normalizar nombres de columnas
+    df.columns = [c.lower().strip() for c in df.columns]
+    columnas_originales = set(df.columns)
+
+    # 5 — Resolver alias de columna 'nombre'
+    col_nombre = next((c for c in df.columns if c in ALIAS_NOMBRE), None)
+    if col_nombre is None:
+        logger.warning(
+            f"[VALIDAR] {email} — columna 'nombre' no encontrada. "
+            f"Columnas recibidas: {sorted(columnas_originales)}"
+        )
+        raise HTTPException(
+            400,
+            detail=(
+                f"Formato de archivo incorrecto. No se encontró la columna de nombre del producto. "
+                f"Columnas detectadas: {', '.join(sorted(columnas_originales))}. "
+                f"Renombrá la columna principal a 'nombre' (o 'nombre_producto', 'product_name')."
+            )
+        )
+
+    if col_nombre != "nombre":
+        df = df.rename(columns={col_nombre: "nombre"})
+        logger.info(f"[VALIDAR] {email} — alias '{col_nombre}' → 'nombre' aplicado.")
+
+    # 6 — Resolver aliases de columnas opcionales
+    for col_destino, aliases in COLUMNAS_OPCIONALES_ALIAS.items():
+        if col_destino not in df.columns:
+            alias_encontrado = next((c for c in df.columns if c in aliases), None)
+            if alias_encontrado:
+                df = df.rename(columns={alias_encontrado: col_destino})
+                logger.info(f"[VALIDAR] {email} — alias '{alias_encontrado}' → '{col_destino}' aplicado.")
+
+    # 7 — Limpiar filas sin nombre
+    df = df.dropna(subset=["nombre"])
+    df = df[df["nombre"].astype(str).str.strip() != ""]
+
+    # 8 — Mínimo de filas válidas
+    if len(df) == 0:
+        logger.warning(f"[VALIDAR] {email} — CSV sin filas válidas después de limpiar.")
+        raise HTTPException(
+            400,
+            detail="El CSV no tiene productos válidos. Revisá que la columna 'nombre' no esté vacía."
+        )
+
+    # 9 — Límite del plan
+    if len(df) > limite:
+        logger.warning(
+            f"[VALIDAR] {email} — excedió límite del plan: subió {len(df)} productos, límite={limite}."
+        )
+        raise HTTPException(
+            400,
+            detail=(
+                f"Tu plan permite procesar hasta {limite} productos por archivo. "
+                f"Tu CSV contiene {len(df)} productos válidos. "
+                f"Por favor reducí el archivo o adquirí un plan superior."
+            )
+        )
+
+    logger.info(f"[VALIDAR] {email} — CSV válido: {len(df)} productos, columnas={sorted(df.columns.tolist())}")
+    return df
+
+
 # ── Procesar CSV ───────────────────────────────────────────────────────────────
 @app.post("/procesar")
 async def procesar(
@@ -329,6 +440,7 @@ async def procesar(
     lang:        str = Form("es"),
     access_code: str = Form(...),
 ):
+    # — Validar código de acceso —
     code_upper = access_code.strip().upper()
     row = get_code(code_upper)
 
@@ -339,31 +451,12 @@ async def procesar(
     if used:
         raise HTTPException(400, detail="Este código ya fue usado. Cada código es de un solo uso.")
 
-    limite    = LIMITES[code_type]
-    MAX_BYTES = 5 * 1024 * 1024  # 5 MB máximo
-
+    # — Leer y validar CSV —
     contenido = await file.read()
+    limite    = LIMITES[code_type]
+    df        = validar_csv(contenido, file.filename, limite, email)
 
-    if len(contenido) == 0:
-        raise HTTPException(400, detail="El archivo está vacío.")
-    if len(contenido) > MAX_BYTES:
-        raise HTTPException(400, detail=f"El archivo es demasiado grande. Máximo permitido: 5 MB.")
-
-    try:
-        df = pd.read_csv(io.BytesIO(contenido))
-        df.columns = [c.lower().strip() for c in df.columns]
-    except Exception:
-        raise HTTPException(400, detail="Formato de archivo incorrecto. Asegurate de subir un CSV válido con columnas: nombre, categoria, caracteristicas.")
-
-    if 'nombre' not in df.columns:
-        raise HTTPException(400, detail="El CSV no tiene una columna 'nombre'. Revisá que las columnas sean: nombre, categoria, caracteristicas.")
-
-    df = df.dropna(subset=['nombre'])
-    df = df[df['nombre'].str.strip() != '']
-
-    if len(df) > limite:
-        raise HTTPException(400, detail=f"Tu plan permite hasta {limite} productos. Tu CSV tiene {len(df)}.")
-
+    # — Todo OK: marcar código y encolar procesamiento —
     mark_used(code_upper)
     background_tasks.add_task(procesar_csv, contenido, email, storeName, tone, lang)
     return {"status": "ok", "message": f"Procesando {len(df)} productos. Te llega por email en minutos."}
