@@ -64,10 +64,16 @@ def init_db():
             plan         TEXT NOT NULL,
             payment_id   TEXT,
             code         TEXT,
+            buyer_email  TEXT,
             status       TEXT NOT NULL DEFAULT 'pending',
             created_at   TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    # Migración segura: agrega buyer_email si ya existía la tabla sin esa columna
+    try:
+        con.execute("ALTER TABLE payments ADD COLUMN buyer_email TEXT")
+    except sqlite3.OperationalError:
+        pass  # ya existe, ignorar
     con.commit()
     con.close()
 
@@ -230,14 +236,44 @@ async def webhook(request: Request):
         con.close()
         return {"status": "already_processed"}
 
-    code = create_access_code(row[1])
+    plan        = row[1]
+    buyer_email = (payment.get("payer") or {}).get("email", "")
+    code        = create_access_code(plan)
+
     con.execute(
-        "UPDATE payments SET status='approved', payment_id=?, code=? WHERE reference_id=?",
-        (str(payment_id), code, ref)
+        "UPDATE payments SET status='approved', payment_id=?, code=?, buyer_email=? WHERE reference_id=?",
+        (str(payment_id), code, buyer_email, ref)
     )
     con.commit()
     con.close()
 
+    # Enviar código por email al comprador como backup
+    if buyer_email:
+        plan_label = {"basic": "Inicial (50 prod)", "standard": "Crecimiento (200 prod)", "premium": "Corporativo (1000 prod)"}.get(plan, plan)
+        try:
+            resend.Emails.send({
+                "from":     FROM_EMAIL,
+                "to":       buyer_email,
+                "reply_to": REPLY_TO,
+                "subject":  "✅ DescribeAI — Tu código de acceso",
+                "html": f"""
+                <div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;background:#07071a;color:#e0e0e0;padding:40px;border-radius:16px;">
+                  <h2 style="color:#fff;">¡Tu pago fue exitoso! 🎉</h2>
+                  <p>Gracias por comprar DescribeAI — <strong>{plan_label}</strong>.</p>
+                  <p style="margin-top:20px;">Tu código de acceso es:</p>
+                  <div style="background:#1a1a2e;border:2px solid #4f8ef7;border-radius:12px;padding:24px;margin:20px 0;text-align:center;">
+                    <span style="font-family:monospace;font-size:2rem;font-weight:900;letter-spacing:4px;color:#4f8ef7;">{code}</span>
+                  </div>
+                  <p style="color:#aaa;font-size:0.85rem;">Guardá este email. Si perdés el código, respondé este email y te ayudamos.</p>
+                  <a href="{SITE_URL}/#usar" style="display:inline-block;margin-top:24px;background:#4f8ef7;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;">
+                    Ir al formulario →
+                  </a>
+                </div>""",
+            })
+        except Exception as e:
+            print(f"[EMAIL] Error enviando código a {buyer_email}: {e}")
+
+    print(f"[WEBHOOK] Pago aprobado ref={ref} plan={plan} email={buyer_email} code={code}")
     return {"status": "ok", "code": code}
 
 
@@ -289,12 +325,23 @@ async def procesar(
         raise HTTPException(400, detail="Este código ya fue usado. Cada código es de un solo uso.")
 
     limite    = LIMITES[code_type]
+    MAX_BYTES = 5 * 1024 * 1024  # 5 MB máximo
+
     contenido = await file.read()
-    df        = pd.read_csv(io.BytesIO(contenido))
-    df.columns = [c.lower().strip() for c in df.columns]
+
+    if len(contenido) == 0:
+        raise HTTPException(400, detail="El archivo está vacío.")
+    if len(contenido) > MAX_BYTES:
+        raise HTTPException(400, detail=f"El archivo es demasiado grande. Máximo permitido: 5 MB.")
+
+    try:
+        df = pd.read_csv(io.BytesIO(contenido))
+        df.columns = [c.lower().strip() for c in df.columns]
+    except Exception:
+        raise HTTPException(400, detail="Formato de archivo incorrecto. Asegurate de subir un CSV válido con columnas: nombre, categoria, caracteristicas.")
 
     if 'nombre' not in df.columns:
-        raise HTTPException(400, detail="El CSV no tiene una columna 'nombre'.")
+        raise HTTPException(400, detail="El CSV no tiene una columna 'nombre'. Revisá que las columnas sean: nombre, categoria, caracteristicas.")
 
     df = df.dropna(subset=['nombre'])
     df = df[df['nombre'].str.strip() != '']

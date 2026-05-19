@@ -148,17 +148,48 @@
       }
     }
 
-    async function copiar() {
+    function copiar() {
       const code = document.getElementById('codeDisplay').textContent;
       const msg  = document.getElementById('copiedMsg');
       const btn  = document.getElementById('copyBtn');
-      try {
-        await navigator.clipboard.writeText(code);
+
+      function onCopied() {
         msg.classList.remove('hidden');
         btn.textContent = '✔ Copiado';
         setTimeout(() => { msg.classList.add('hidden'); btn.textContent = '📋 Copiar código'; }, 3000);
-      } catch {
-        alert('Copiá manualmente: ' + code);
+      }
+
+      // Intento 1: Clipboard API moderna (Chrome, Safari 13+)
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(onCopied).catch(fallback);
+        return;
+      }
+
+      // Fallback: execCommand (funciona en WebView de Instagram/FB/TikTok)
+      fallback();
+
+      function fallback() {
+        const ta = document.createElement('textarea');
+        ta.value = code;
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+          document.execCommand('copy');
+          onCopied();
+        } catch {
+          // Último recurso: seleccionar el texto del código para copiar manual
+          const el = document.getElementById('codeDisplay');
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+          msg.textContent = '👆 Texto seleccionado — presioná Copiar';
+          msg.classList.remove('hidden');
+        } finally {
+          document.body.removeChild(ta);
+        }
       }
     }
 
