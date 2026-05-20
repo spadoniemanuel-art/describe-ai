@@ -433,12 +433,13 @@ def validar_csv(contenido: bytes, filename: str, limite: int, email: str) -> pd.
 @app.post("/procesar")
 async def procesar(
     background_tasks: BackgroundTasks,
-    file:        UploadFile = None,
-    email:       str = Form(...),
-    storeName:   str = Form("Mi Tienda"),
-    tone:        str = Form("profesional"),
-    lang:        str = Form("es"),
-    access_code: str = Form(...),
+    file:          UploadFile = None,
+    email:         str = Form(...),
+    storeName:     str = Form("Mi Tienda"),
+    tone:          str = Form("profesional"),
+    lang:          str = Form("es"),
+    access_code:   str = Form(...),
+    pais_destino:  str = Form("Neutro"),   # opcional — default "Neutro"
 ):
     # — Validar código de acceso —
     code_upper = access_code.strip().upper()
@@ -456,22 +457,42 @@ async def procesar(
     limite    = LIMITES[code_type]
     df        = validar_csv(contenido, file.filename, limite, email)
 
+    pais_limpio = pais_destino.strip() or "Neutro"
+    logger.info(f"[PROCESAR] {email} | pais_destino='{pais_limpio}' | tone='{tone}' | lang='{lang}'")
+
     # — Todo OK: marcar código y encolar procesamiento —
     mark_used(code_upper)
-    background_tasks.add_task(procesar_csv, contenido, email, storeName, tone, lang)
+    background_tasks.add_task(procesar_csv, contenido, email, storeName, tone, lang, pais_limpio)
     return {"status": "ok", "message": f"Procesando {len(df)} productos. Te llega por email en minutos."}
 
 
 # ── Generación con Groq ────────────────────────────────────────────────────────
-def generar_descripcion(producto: dict, tono: str, idioma: str) -> str:
+def generar_descripcion(producto: dict, tono: str, idioma: str,
+                        pais_destino: str = "Neutro") -> str:
     """
     Llama a Groq con semáforo global y exponential backoff en Rate Limit (429).
+    Soporta localización dinámica por país vía system prompt.
     Intentos: hasta 4. Esperas: 2s → 4s → 8s → 16s.
     """
-    nombre  = producto.get('nombre', '(sin nombre)')
-    client  = Groq(api_key=GROQ_KEY)
-    prompt  = f"""Sos un copywriter experto en eCommerce.
-Genera una descripcion de producto atractiva en tono {tono}.
+    nombre = producto.get('nombre', '(sin nombre)')
+    client = Groq(api_key=GROQ_KEY)
+
+    system_prompt = f"""Actua como un experto copywriter de e-commerce local. Tu objetivo es redactar descripciones altamente vendedoras, persuasivas y profesionales para el mercado de un pais especifico.
+
+REGLA CRITICA DE LOCALIZACION LINGUISTICA:
+- El pais de destino de este producto es: {pais_destino}.
+- Debes adaptar de forma organica y natural todo el vocabulario, nombres de prendas, modismos comerciales y giros linguisticos al espanol nativo de ese pais especifico.
+- Ejemplos de adaptacion automatica segun el pais recibido:
+  * Si es 'Argentina' o 'Uruguay': usa voseo sutil y terminos como remera, campera, zapatillas.
+  * Si es 'Mexico': usa playera, chamarra, tenis.
+  * Si es 'Chile': usa polera, chaqueta, zapatillas.
+  * Si es 'Peru': usa polo, casaca, zapatillas.
+  * Si es 'Colombia': usa camiseta, chaqueta, tenis.
+  * Si es 'Espana': usa camiseta, chaqueta, zapatillas, ordenador, etc.
+  * Si es 'Neutro': mantene un espanol latinoamericano estandar, neutro, profesional y libre de localismos.
+- IMPORTANTE: No exageres usando jerga callejera o vulgar. El tono debe ser el de una tienda de e-commerce profesional, confiable y nativa de ese pais."""
+
+    user_prompt = f"""Genera UNA descripcion de producto en tono {tono} para el mercado de {pais_destino}.
 Idioma: {idioma}
 
 Producto:
@@ -479,29 +500,33 @@ Producto:
 - Categoria: {producto.get('categoria', '')}
 - Caracteristicas: {producto.get('caracteristicas', '')}
 
-Reglas ESTRICTAS:
+Reglas de formato:
 - Maximo 100 palabras
-- Solo usa la info dada, no inventes nada
-- Sin tildes, sin acentos, sin caracteres especiales
-- Usa unicamente letras a-z, numeros y puntuacion basica
-- Envolvé las palabras clave importantes del producto en etiquetas <b>
-- Solo la descripcion, sin titulos ni explicaciones"""
+- Solo usa la informacion dada, no inventes datos
+- Envuelve las palabras clave importantes en etiquetas <b>
+- Solo la descripcion, sin titulos ni explicaciones adicionales"""
 
     MAX_INTENTOS = 4
 
     for intento in range(MAX_INTENTOS):
         try:
-            logger.info(f"[GROQ] Adquiriendo semáforo para '{nombre}' (intento {intento + 1}/{MAX_INTENTOS})")
+            logger.info(
+                f"[GROQ] Adquiriendo semaforo para '{nombre}' | pais='{pais_destino}' "
+                f"(intento {intento + 1}/{MAX_INTENTOS})"
+            )
             with GROQ_SEMAPHORE:
-                logger.info(f"[GROQ] Semáforo adquirido — llamando API para '{nombre}'")
+                logger.info(f"[GROQ] Semaforo adquirido — llamando API para '{nombre}'")
                 response = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=200,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user",   "content": user_prompt},
+                    ],
+                    max_tokens=250,
                     temperature=0.7,
                 )
             result = response.choices[0].message.content.strip()
-            logger.info(f"[GROQ] Éxito para '{nombre}' en intento {intento + 1}")
+            logger.info(f"[GROQ] Exito para '{nombre}' | pais='{pais_destino}' en intento {intento + 1}")
             return result
 
         except groq_lib.RateLimitError:
@@ -522,14 +547,16 @@ Reglas ESTRICTAS:
             if intento < MAX_INTENTOS - 1:
                 time.sleep(wait)
 
-    logger.error(f"[GROQ] Falló tras {MAX_INTENTOS} intentos para '{nombre}'. Devolviendo placeholder.")
+    logger.error(f"[GROQ] Fallo tras {MAX_INTENTOS} intentos para '{nombre}'. Devolviendo placeholder.")
     return "Error: no se pudo generar la descripcion"
 
 
-def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: str):
+def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: str,
+                 pais_destino: str = "Neutro"):
     """
     Procesa el CSV con ThreadPoolExecutor (hasta GROQ_MAX_WORKERS filas en paralelo).
     El GROQ_SEMAPHORE limita las llamadas simultáneas reales a Groq globalmente.
+    Soporta localización dinámica por pais_destino.
     """
     try:
         df = pd.read_csv(io.BytesIO(contenido))
@@ -538,15 +565,18 @@ def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: s
         df = df[df['nombre'].str.strip() != '']
 
         total = len(df)
-        logger.info(f"[CSV] Iniciando procesamiento de {total} productos para {email} | tienda={tienda}")
+        logger.info(
+            f"[CSV] Iniciando procesamiento de {total} productos para {email} "
+            f"| tienda={tienda} | pais_destino='{pais_destino}'"
+        )
 
-        rows         = [row.to_dict() for _, row in df.iterrows()]
+        rows          = [row.to_dict() for _, row in df.iterrows()]
         descripciones = [None] * total
         completados   = 0
 
         def _procesar_fila(args: tuple) -> tuple:
             idx, producto = args
-            return idx, generar_descripcion(producto, tono, idioma)
+            return idx, generar_descripcion(producto, tono, idioma, pais_destino)
 
         with ThreadPoolExecutor(max_workers=GROQ_MAX_WORKERS) as executor:
             futures = {

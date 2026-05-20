@@ -342,6 +342,22 @@
 
           <div>
             <label class="block text-sm font-semibold text-gray-300 mb-2">
+              🌍 País de destino
+            </label>
+            <select id="pais_destino" class="w-full bg-[#07071a] border-2 border-white/10 rounded-xl px-4 py-3 focus:border-blue-500 focus:outline-none">
+              <option value="Neutro">🌐 Neutro (Español estándar)</option>
+              <option value="Argentina">🇦🇷 Argentina</option>
+              <option value="México">🇲🇽 México</option>
+              <option value="Chile">🇨🇱 Chile</option>
+              <option value="Colombia">🇨🇴 Colombia</option>
+              <option value="Perú">🇵🇪 Perú</option>
+              <option value="Uruguay">🇺🇾 Uruguay</option>
+              <option value="España">🇪🇸 España</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-2">
               🔑 Código de acceso
             </label>
             <input type="text" id="access_code" placeholder="Ej: BASIC-A1B2C3" required
@@ -483,7 +499,8 @@
       data.append('storeName',   document.getElementById('storeName').value);
       data.append('tone',        document.getElementById('tone').value);
       data.append('lang',        document.getElementById('lang').value);
-      data.append('access_code', document.getElementById('access_code').value.trim().toUpperCase());
+      data.append('access_code',  document.getElementById('access_code').value.trim().toUpperCase());
+      data.append('pais_destino', document.getElementById('pais_destino').value);
 
       btn.disabled    = true;
       btn.textContent = 'Enviando...';

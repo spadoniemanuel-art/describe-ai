@@ -245,6 +245,32 @@ def test_7_codigo_invalido():
     return f"Código inválido → 400: '{res.json()['detail']}'"
 
 
+def test_9_localizacion_pais():
+    """Verifica que pais_destino se propaga sin errores y retorna HTTP 200."""
+    paises = ["Argentina", "Mexico", "Chile", "Neutro"]
+    for pais in paises:
+        code = fresh_code("basic")
+        csv  = make_csv(
+            columns=["nombre", "categoria", "caracteristicas"],
+            rows=[["Campera de cuero", "Ropa", "cuero genuino talle M impermeable"]],
+        )
+        res = client.post("/procesar", data={
+            "email":        f"qa+{pais.lower()}@describeai.store",
+            "storeName":    f"Tienda {pais}",
+            "tone":         "profesional",
+            "lang":         "es",
+            "access_code":  code,
+            "pais_destino": pais,
+        }, files={"file": ("productos.csv", csv, "text/csv")})
+
+        assert res.status_code == 200, \
+            f"pais_destino='{pais}' → Esperaba 200, recibí {res.status_code}: {res.json()}"
+        assert res.json().get("status") == "ok", \
+            f"pais_destino='{pais}' → status != ok: {res.json()}"
+
+    return f"Todos los paises probados sin errores: {paises}"
+
+
 def test_8_codigo_ya_usado():
     code = fresh_code("basic")
     csv  = make_csv(["nombre", "categoria", "caracteristicas"],
@@ -273,7 +299,8 @@ if __name__ == "__main__":
     run_test("Test 5 — Archivo vacío",                                  test_5_archivo_vacio)
     run_test("Test 6 — Extensión inválida (.xlsx rechazado)",           test_6_extension_invalida)
     run_test("Test 7 — Código de acceso inválido",                      test_7_codigo_invalido)
-    run_test("Test 8 — Código ya usado (reutilización bloqueada)",      test_8_codigo_ya_usado)
+    run_test("Test 8 — Codigo ya usado (reutilizacion bloqueada)",       test_8_codigo_ya_usado)
+    run_test("Test 9 — Localizacion por pais (AR/MX/CL/Neutro → 200)", test_9_localizacion_pais)
 
     # ── Reporte final ──────────────────────────────────────────────────────────
     passed  = sum(1 for _, ok, _ in results if ok)
