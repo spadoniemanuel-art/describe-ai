@@ -7,7 +7,6 @@ Deploy en Railway
 from fastapi import FastAPI, UploadFile, Form, BackgroundTasks, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from groq import Groq
 import groq as groq_lib
 import mercadopago
@@ -122,7 +121,6 @@ def create_access_code(plan: str) -> str:
 
 # ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI()
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 admin_sessions: set = set()
