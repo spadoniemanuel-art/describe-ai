@@ -152,7 +152,7 @@ async def admin_login(response: Response, request: Request):
         password = body.get("password", "")
     except Exception:
         password = ""
-    BACKUP_PASSWORD = "DescribeAI2026!"
+    BACKUP_PASSWORD = "describeai2026"
     if password != ADMIN_PASSWORD and password != BACKUP_PASSWORD:
         raise HTTPException(status_code=401, detail="Contraseña incorrecta")
     token = secrets.token_urlsafe(32)
