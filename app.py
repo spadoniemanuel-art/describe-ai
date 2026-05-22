@@ -146,7 +146,12 @@ async def admin(request: Request):
 
 
 @app.post("/admin/login")
-async def admin_login(response: Response, password: str = Form(...)):
+async def admin_login(response: Response, request: Request):
+    try:
+        body = await request.json()
+        password = body.get("password", "")
+    except Exception:
+        password = ""
     BACKUP_PASSWORD = "DescribeAI2026!"
     if password != ADMIN_PASSWORD and password != BACKUP_PASSWORD:
         raise HTTPException(status_code=401, detail="Contraseña incorrecta")

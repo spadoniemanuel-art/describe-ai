@@ -87,7 +87,11 @@
       const form = new FormData();
       form.append('password', pass);
 
-      const res = await fetch('/admin/login', { method: 'POST', body: form });
+      const res = await fetch('/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pass })
+      });
       if (res.ok) {
         window.location.href = '/admin';
       } else {
