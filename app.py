@@ -16,6 +16,8 @@ import base64
 import os
 import time
 import sqlite3
+import hashlib
+import hmac
 import uuid
 import secrets
 import threading
@@ -123,7 +125,15 @@ def create_access_code(plan: str) -> str:
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-admin_sessions: set = set()
+BACKUP_ADMIN_PASSWORD = "describeai2026"
+
+def make_admin_token() -> str:
+    """Token determinístico — no necesita memoria compartida entre instancias."""
+    secret = (ADMIN_PASSWORD + BACKUP_ADMIN_PASSWORD).encode()
+    return hmac.new(secret, b"admin-session", hashlib.sha256).hexdigest()
+
+def valid_admin_cookie(token: str) -> bool:
+    return token == make_admin_token()
 
 
 # ── Páginas estáticas ──────────────────────────────────────────────────────────
@@ -140,7 +150,7 @@ async def success_page():
 @app.get("/admin")
 async def admin(request: Request):
     token = request.cookies.get("admin_session")
-    if token and token in admin_sessions:
+    if token and valid_admin_cookie(token):
         return FileResponse(os.path.join(BASE_DIR, "static", "admin.html"))
     return FileResponse(os.path.join(BASE_DIR, "static", "login.html"))
 
@@ -152,20 +162,15 @@ async def admin_login(response: Response, request: Request):
         password = body.get("password", "")
     except Exception:
         password = ""
-    BACKUP_PASSWORD = "describeai2026"
-    if password != ADMIN_PASSWORD and password != BACKUP_PASSWORD:
+    if password != ADMIN_PASSWORD and password != BACKUP_ADMIN_PASSWORD:
         raise HTTPException(status_code=401, detail="Contraseña incorrecta")
-    token = secrets.token_urlsafe(32)
-    admin_sessions.add(token)
+    token = make_admin_token()
     response.set_cookie(key="admin_session", value=token, httponly=True, samesite="lax", max_age=60*60*24*7)
     return {"status": "ok"}
 
 
 @app.post("/admin/logout")
-async def admin_logout(request: Request, response: Response):
-    token = request.cookies.get("admin_session")
-    if token:
-        admin_sessions.discard(token)
+async def admin_logout(response: Response):
     response.delete_cookie("admin_session")
     return RedirectResponse("/admin", status_code=302)
 
