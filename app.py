@@ -454,7 +454,13 @@ def get_client_ip(request: Request) -> str:
 
 
 @app.post("/prueba-gratis")
-async def prueba_gratis(request: Request, file: UploadFile = None):
+async def prueba_gratis(
+    request: Request,
+    file: UploadFile = None,
+    lang: str = Form("es"),
+    tone: str = Form("profesional"),
+    pais: str = Form("Neutro"),
+):
     ip = get_client_ip(request)
     logger.info(f"[TRIAL] Solicitud desde IP={ip}")
 
@@ -515,11 +521,12 @@ async def prueba_gratis(request: Request, file: UploadFile = None):
         )
 
     # — Procesar con Groq (sincrónico para devolver descarga) —
-    logger.info(f"[TRIAL] Procesando {len(df)} productos para IP={ip}")
+    pais_limpio = pais.strip() or "Neutro"
+    logger.info(f"[TRIAL] Procesando {len(df)} productos para IP={ip} | tone={tone} | lang={lang} | pais={pais_limpio}")
     rows = [row.to_dict() for _, row in df.iterrows()]
     descripciones = []
     for producto in rows:
-        desc = generar_descripcion(producto, "profesional", "es", "Neutro")
+        desc = generar_descripcion(producto, tone, lang, pais_limpio)
         descripciones.append(desc)
     df["descripcion_generada"] = descripciones
 

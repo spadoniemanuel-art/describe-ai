@@ -231,6 +231,40 @@
                 <input type="file" id="freeTrialFile" accept=".csv" required
                   class="w-full bg-[#07071a] border-2 border-white/10 rounded-xl px-4 py-3 text-sm focus:border-green-500 focus:outline-none" />
               </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 mb-1.5">Idioma</label>
+                  <select id="freeTrialLang" class="w-full bg-[#07071a] border-2 border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none">
+                    <option value="es">Español</option>
+                    <option value="en">English</option>
+                    <option value="pt">Português</option>
+                    <option value="fr">Français</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 mb-1.5">Tono</label>
+                  <select id="freeTrialTone" class="w-full bg-[#07071a] border-2 border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none">
+                    <option value="profesional">Profesional</option>
+                    <option value="amigable">Amigable</option>
+                    <option value="lujoso">Lujoso</option>
+                    <option value="divertido">Divertido</option>
+                    <option value="tecnico">Técnico</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-400 mb-1.5">🌍 País del público objetivo (Tono y modismos)</label>
+                <select id="freeTrialPais" class="w-full bg-[#07071a] border-2 border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none">
+                  <option value="Neutro">🌐 Neutro (Español estándar)</option>
+                  <option value="Argentina">🇦🇷 Argentina</option>
+                  <option value="México">🇲🇽 México</option>
+                  <option value="Chile">🇨🇱 Chile</option>
+                  <option value="Colombia">🇨🇴 Colombia</option>
+                  <option value="Perú">🇵🇪 Perú</option>
+                  <option value="Uruguay">🇺🇾 Uruguay</option>
+                  <option value="España">🇪🇸 España</option>
+                </select>
+              </div>
               <div id="freeTrialError" class="hidden text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl p-3"></div>
               <button type="submit" id="freeTrialBtn"
                 class="w-full py-3.5 rounded-xl font-bold text-white bg-green-600 hover:bg-green-500 transition-all">
@@ -598,7 +632,10 @@
       btn.textContent = 'Procesando... puede tardar hasta 30 segundos';
 
       const data = new FormData();
-      data.append('file', file);
+      data.append('file',  file);
+      data.append('lang',  document.getElementById('freeTrialLang').value);
+      data.append('tone',  document.getElementById('freeTrialTone').value);
+      data.append('pais',  document.getElementById('freeTrialPais').value);
 
       try {
         const res = await fetch('/prueba-gratis', { method: 'POST', body: data });
