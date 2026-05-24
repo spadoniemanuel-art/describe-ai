@@ -252,7 +252,7 @@
                   </select>
                 </div>
               </div>
-              <div>
+              <div id="freeTrialPaisContainer">
                 <label class="block text-xs font-semibold text-gray-400 mb-1.5">🌍 País del público objetivo (Tono y modismos)</label>
                 <select id="freeTrialPais" class="w-full bg-[#07071a] border-2 border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none">
                   <option value="Neutro">🌐 Neutro (Español estándar)</option>
@@ -422,7 +422,7 @@
             </div>
           </div>
 
-          <div>
+          <div id="paisDestinoContainer">
             <label class="block text-sm font-semibold text-gray-300 mb-2">
               🌍 País del público objetivo (Tono y modismos)
             </label>
@@ -603,6 +603,26 @@
         btn.textContent = 'Generar descripciones';
       }
     });
+
+    // ── Visibilidad del selector País según Idioma ───────────────────────────
+    function togglePais(langSelectId, paisContainerId, paisSelectId) {
+      const lang = document.getElementById(langSelectId).value;
+      const container = document.getElementById(paisContainerId);
+      if (lang === 'es') {
+        container.classList.remove('hidden');
+      } else {
+        container.classList.add('hidden');
+        document.getElementById(paisSelectId).value = 'Neutro';
+      }
+    }
+
+    // Formulario principal
+    document.getElementById('lang').addEventListener('change', () =>
+      togglePais('lang', 'paisDestinoContainer', 'pais_destino'));
+
+    // Prueba gratis
+    document.getElementById('freeTrialLang').addEventListener('change', () =>
+      togglePais('freeTrialLang', 'freeTrialPaisContainer', 'freeTrialPais'));
 
     // ── Prueba Gratis ────────────────────────────────────────────────────────
     (function initFreeTrial() {

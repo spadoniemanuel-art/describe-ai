@@ -596,7 +596,9 @@ def generar_descripcion(producto: dict, tono: str, idioma: str,
     nombre = producto.get('nombre', '(sin nombre)')
     client = Groq(api_key=GROQ_KEY)
 
-    system_prompt = f"""Actua como un experto copywriter de e-commerce local. Tu objetivo es redactar descripciones altamente vendedoras, persuasivas y profesionales para el mercado de un pais especifico.
+    if idioma == "es":
+        # Español: localización regional completa
+        system_prompt = f"""Actua como un experto copywriter de e-commerce local. Tu objetivo es redactar descripciones altamente vendedoras, persuasivas y profesionales para el mercado de un pais especifico.
 
 REGLA CRITICA DE LOCALIZACION LINGUISTICA:
 - El pais de destino de este producto es: {pais_destino}.
@@ -611,8 +613,8 @@ REGLA CRITICA DE LOCALIZACION LINGUISTICA:
   * Si es 'Neutro': mantene un espanol latinoamericano estandar, neutro, profesional y libre de localismos.
 - IMPORTANTE: No exageres usando jerga callejera o vulgar. El tono debe ser el de una tienda de e-commerce profesional, confiable y nativa de ese pais."""
 
-    user_prompt = f"""Genera UNA descripcion de producto en tono {tono} para el mercado de {pais_destino}.
-Idioma: {idioma}
+        user_prompt = f"""Genera UNA descripcion de producto en tono {tono} para el mercado de {pais_destino}.
+Idioma: espanol
 
 Producto:
 - Nombre: {producto.get('nombre', '')}
@@ -624,6 +626,33 @@ Reglas de formato:
 - Solo usa la informacion dada, no inventes datos
 - Envuelve las palabras clave importantes en etiquetas <b>
 - Solo la descripcion, sin titulos ni explicaciones adicionales"""
+
+    else:
+        # Otros idiomas: solo tono + traducción, sin localización regional
+        lang_names = {"en": "English", "pt": "Portuguese", "fr": "French"}
+        lang_name  = lang_names.get(idioma, idioma)
+        tone_map   = {
+            "profesional": "professional", "amigable": "friendly",
+            "lujoso": "luxurious", "divertido": "fun and playful", "tecnico": "technical"
+        }
+        tone_name = tone_map.get(tono, tono)
+
+        system_prompt = f"""You are an expert e-commerce copywriter. Your goal is to write highly persuasive,
+professional product descriptions in {lang_name}. Focus on the {tone_name} tone and
+highlight the product's key benefits naturally."""
+
+        user_prompt = f"""Write ONE product description in {lang_name} with a {tone_name} tone.
+
+Product:
+- Name: {producto.get('nombre', '')}
+- Category: {producto.get('categoria', '')}
+- Features: {producto.get('caracteristicas', '')}
+
+Format rules:
+- Maximum 100 words
+- Only use the provided information, do not invent data
+- Wrap important keywords in <b> tags
+- Only the description, no titles or additional explanations"""
 
     MAX_INTENTOS = 4
 
