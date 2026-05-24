@@ -6,7 +6,7 @@ Deploy en Railway
 
 from fastapi import FastAPI, UploadFile, Form, BackgroundTasks, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from groq import Groq
 import groq as groq_lib
 import mercadopago
@@ -72,6 +72,12 @@ def init_db():
             code       TEXT PRIMARY KEY,
             type       TEXT NOT NULL,
             used       INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS free_trials (
+            ip         TEXT PRIMARY KEY,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
@@ -436,6 +442,103 @@ def validar_csv(contenido: bytes, filename: str, limite: int, email: str) -> pd.
 
     logger.info(f"[VALIDAR] {email} — CSV válido: {len(df)} productos, columnas={sorted(df.columns.tolist())}")
     return df
+
+
+# ── Prueba Gratuita ────────────────────────────────────────────────────────────
+def get_client_ip(request: Request) -> str:
+    """Extrae la IP real del cliente respetando el proxy de Railway."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host or "unknown"
+
+
+@app.post("/prueba-gratis")
+async def prueba_gratis(request: Request, file: UploadFile = None):
+    ip = get_client_ip(request)
+    logger.info(f"[TRIAL] Solicitud desde IP={ip}")
+
+    # — Control de abuso por IP —
+    con = sqlite3.connect(DB_PATH)
+    row = con.execute("SELECT ip FROM free_trials WHERE ip = ?", (ip,)).fetchone()
+    con.close()
+    if row:
+        raise HTTPException(
+            403,
+            detail="Ya utilizaste tu prueba gratuita. ¡Te esperamos en nuestros planes pagos!"
+        )
+
+    if file is None:
+        raise HTTPException(400, detail="No se recibió ningún archivo.")
+
+    # — Validar extensión y tamaño —
+    ext = os.path.splitext(file.filename or "")[-1].lower()
+    if ext not in {".csv", ".txt"}:
+        raise HTTPException(400, detail="Solo se aceptan archivos .csv.")
+
+    contenido = await file.read()
+    if len(contenido) == 0:
+        raise HTTPException(400, detail="El archivo está vacío.")
+
+    # — Parsear CSV —
+    try:
+        df = pd.read_csv(io.BytesIO(contenido))
+    except Exception:
+        raise HTTPException(400, detail="No se pudo leer el CSV. Verificá el formato.")
+
+    df.columns = [c.lower().strip() for c in df.columns]
+
+    # — Resolver alias de columna nombre —
+    col_nombre = next((c for c in df.columns if c in ALIAS_NOMBRE), None)
+    if col_nombre is None:
+        raise HTTPException(
+            400,
+            detail=f"No se encontró columna de nombre. Columnas detectadas: {', '.join(df.columns)}. "
+                   f"Renombrá la columna principal a 'nombre'."
+        )
+    if col_nombre != "nombre":
+        df = df.rename(columns={col_nombre: "nombre"})
+
+    df = df.dropna(subset=["nombre"])
+    df = df[df["nombre"].astype(str).str.strip() != ""]
+
+    if len(df) == 0:
+        raise HTTPException(400, detail="El CSV no tiene productos válidos.")
+
+    # — Validar límite de 5 productos —
+    if len(df) > 5:
+        raise HTTPException(
+            400,
+            detail=f"La prueba gratuita admite un máximo de 5 productos. "
+                   f"Tu CSV tiene {len(df)} productos válidos. "
+                   f"Para procesar más, elegí un plan pago."
+        )
+
+    # — Procesar con Groq (sincrónico para devolver descarga) —
+    logger.info(f"[TRIAL] Procesando {len(df)} productos para IP={ip}")
+    rows = [row.to_dict() for _, row in df.iterrows()]
+    descripciones = []
+    for producto in rows:
+        desc = generar_descripcion(producto, "profesional", "es", "Neutro")
+        descripciones.append(desc)
+    df["descripcion_generada"] = descripciones
+
+    # — Registrar IP como usada —
+    con = sqlite3.connect(DB_PATH)
+    con.execute("INSERT OR IGNORE INTO free_trials (ip) VALUES (?)", (ip,))
+    con.commit()
+    con.close()
+    logger.info(f"[TRIAL] Completado para IP={ip}")
+
+    # — Devolver CSV como descarga —
+    output = io.BytesIO()
+    df.to_csv(output, index=False, encoding="utf-8-sig", errors="replace")
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=prueba_gratis_describeai.csv"}
+    )
 
 
 # ── Procesar CSV ───────────────────────────────────────────────────────────────
