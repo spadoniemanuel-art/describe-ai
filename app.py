@@ -639,7 +639,17 @@ Reglas de formato:
 
         system_prompt = f"""You are an expert e-commerce copywriter. Your goal is to write highly persuasive,
 professional product descriptions in {lang_name}. Focus on the {tone_name} tone and
-highlight the product's key benefits naturally."""
+highlight the product's key benefits naturally.
+
+CRITICAL TRANSLATION RULE:
+Your task is to translate and adapt ALL content to {lang_name}.
+You MUST translate every characteristic, material, category and description
+provided in the input data — including words that appear in Spanish.
+The ONLY exception is the exact Brand Name or Model Name of the product
+(e.g. 'Zapatilla Running Pro X' stays as-is).
+Everything else (e.g. 'calzado deportivo', 'suela amortiguada', 'ropa de abrigo')
+MUST be translated naturally into {lang_name}.
+Never leave Spanish words in the output unless they are part of the product's proper name."""
 
         user_prompt = f"""Write ONE product description in {lang_name} with a {tone_name} tone.
 
@@ -652,7 +662,8 @@ Format rules:
 - Maximum 100 words
 - Only use the provided information, do not invent data
 - Wrap important keywords in <b> tags
-- Only the description, no titles or additional explanations"""
+- Only the description, no titles or additional explanations
+- The entire output MUST be written exclusively in {lang_name}"""
 
     MAX_INTENTOS = 4
 
