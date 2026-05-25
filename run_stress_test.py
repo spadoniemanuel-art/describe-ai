@@ -60,8 +60,8 @@ from app import generar_descripcion
 from groq import RateLimitError as _RateLimitError
 
 # ── Rate limiter para stress test (independiente del backend) ─────────────────
-STRESS_MAX_WORKERS = 2      # máximo 2 hilos simultáneos (amigable con free tier)
-STRESS_DELAY       = 1.2    # segundos de pausa entre envíos al ejecutor
+STRESS_MAX_WORKERS = 5      # 5 hilos simultáneos
+STRESS_DELAY       = 0.2    # pausa mínima entre envíos
 STRESS_MAX_RETRIES = 3      # intentos propios del stress test (adicionales al backoff interno)
 _submit_lock       = __import__("threading").Lock()
 
@@ -237,7 +237,7 @@ def _procesar_con_retry(idx: int, producto: dict) -> tuple:
     Si recibe 429 explícito espera con backoff pesado (10s → 30s → 60s).
     Retorna (idx, descripcion_o_error, fue_ok).
     """
-    esperas_429 = [10, 30, 60]
+    esperas_429 = [5, 15, 30]
     for intento in range(STRESS_MAX_RETRIES):
         try:
             desc = generar_descripcion(producto, TONO, IDIOMA, PAIS)
