@@ -56,7 +56,14 @@ except Exception as _e:
 # ── Silenciar logs de app.py ───────────────────────────────────────────────────
 logging.disable(logging.CRITICAL)
 
-from app import generar_descripcion, GROQ_SEMAPHORE, GROQ_MAX_WORKERS
+from app import generar_descripcion
+from groq import RateLimitError as _RateLimitError
+
+# ── Rate limiter para stress test (independiente del backend) ─────────────────
+STRESS_MAX_WORKERS = 2      # máximo 2 hilos simultáneos (amigable con free tier)
+STRESS_DELAY       = 1.2    # segundos de pausa entre envíos al ejecutor
+STRESS_MAX_RETRIES = 3      # intentos propios del stress test (adicionales al backoff interno)
+_submit_lock       = __import__("threading").Lock()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Generador de 999 productos de librería
@@ -212,45 +219,98 @@ print(f"\n{SEP}")
 print(f"  DescribeAI — Stress Test de Procesamiento Masivo")
 print(f"  Productos  : {TOTAL}")
 print(f"  Idioma     : Español  |  Tono: Técnico  |  País: Colombia")
-print(f"  Concurrencia: {GROQ_MAX_WORKERS} hilos (GROQ_SEMAPHORE activo)")
+print(f"  Concurrencia: {STRESS_MAX_WORKERS} hilos | Delay: {STRESS_DELAY}s | Retries: {STRESS_MAX_RETRIES}")
 print(f"  Inicio     : {inicio_ts.strftime('%Y-%m-%d %H:%M:%S')}")
 print(f"{SEP}\n")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Procesamiento con ThreadPoolExecutor (igual que procesar_csv en app.py)
+# Procesamiento inteligente con rate limiting y retries
 # ══════════════════════════════════════════════════════════════════════════════
 resultados    = [None] * TOTAL
 completados   = 0
 errores_count = 0
+fallidos_log  = []   # productos que fallaron tras todos los reintentos
 
-def _procesar(args):
-    idx, producto = args
-    return idx, generar_descripcion(producto, TONO, IDIOMA, PAIS)
-
-print(f"  Procesando {TOTAL} productos en paralelo (máx. {GROQ_MAX_WORKERS} hilos)...\n")
-
-with ThreadPoolExecutor(max_workers=GROQ_MAX_WORKERS) as executor:
-    futures = {
-        executor.submit(_procesar, (i, prod)): i
-        for i, prod in enumerate(PRODUCTOS_999)
-    }
-    for future in as_completed(futures):
-        idx = futures[future]
+def _procesar_con_retry(idx: int, producto: dict) -> tuple:
+    """
+    Llama a generar_descripcion con hasta STRESS_MAX_RETRIES intentos propios.
+    Si recibe 429 explícito espera con backoff pesado (10s → 30s → 60s).
+    Retorna (idx, descripcion_o_error, fue_ok).
+    """
+    esperas_429 = [10, 30, 60]
+    for intento in range(STRESS_MAX_RETRIES):
         try:
-            i, desc = future.result()
-            resultados[i] = desc
-            ok = desc and not desc.startswith("Error:")
-            completados += 1
-            if not ok:
-                errores_count += 1
-            # Progreso cada 50 productos
-            if completados % 50 == 0 or completados == TOTAL:
-                pct = completados / TOTAL * 100
-                print(f"  [{completados:>3}/{TOTAL}] {pct:.0f}% completado — errores hasta ahora: {errores_count}")
+            desc = generar_descripcion(producto, TONO, IDIOMA, PAIS)
+            if desc and not desc.startswith("Error:"):
+                return idx, desc, True
+            # generar_descripcion agotó sus reintentos internos
+            if intento < STRESS_MAX_RETRIES - 1:
+                wait = esperas_429[intento]
+                time.sleep(wait)
+        except _RateLimitError:
+            wait = esperas_429[min(intento, len(esperas_429) - 1)]
+            print(f"  ⚠  429 en producto #{idx+1} — esperando {wait}s (intento {intento+1}/{STRESS_MAX_RETRIES})")
+            if intento < STRESS_MAX_RETRIES - 1:
+                time.sleep(wait)
         except Exception as exc:
-            resultados[idx] = f"Error: {type(exc).__name__}: {exc}"
-            errores_count += 1
-            completados += 1
+            return idx, f"Error: {type(exc).__name__}: {exc}", False
+
+    return idx, "Error: fallido tras todos los reintentos", False
+
+
+print(f"  Procesando {TOTAL} productos (modo rate-limit friendly)...\n")
+
+from concurrent.futures import Future
+with ThreadPoolExecutor(max_workers=STRESS_MAX_WORKERS) as executor:
+    futures: dict[Future, int] = {}
+
+    # Enviar jobs con delay entre cada submit para no saturar
+    def _submit_all():
+        for i, prod in enumerate(PRODUCTOS_999):
+            f = executor.submit(_procesar_con_retry, i, prod)
+            futures[f] = i
+            time.sleep(STRESS_DELAY)   # pausa entre envíos
+
+    import threading
+    submit_thread = threading.Thread(target=_submit_all, daemon=True)
+    submit_thread.start()
+
+    # Recoger resultados a medida que llegan
+    processed = 0
+    while processed < TOTAL:
+        done_futures = [f for f in list(futures) if f.done()]
+        for future in done_futures:
+            if future in futures:
+                idx = futures.pop(future)
+                try:
+                    i, desc, ok = future.result()
+                    resultados[i] = desc
+                    completados += 1
+                    processed += 1
+                    if not ok:
+                        errores_count += 1
+                        fallidos_log.append({
+                            "idx":     i,
+                            "nombre":  PRODUCTOS_999[i]["nombre"],
+                            "error":   desc,
+                        })
+                    if completados % 50 == 0 or completados == TOTAL:
+                        pct = completados / TOTAL * 100
+                        print(f"  [{completados:>3}/{TOTAL}] {pct:.0f}% — errores: {errores_count}")
+                except Exception as exc:
+                    resultados[idx] = f"Error: {type(exc).__name__}: {exc}"
+                    errores_count += 1
+                    completados += 1
+                    processed += 1
+                    fallidos_log.append({
+                        "idx":    idx,
+                        "nombre": PRODUCTOS_999[idx]["nombre"],
+                        "error":  str(exc),
+                    })
+        if processed < TOTAL:
+            time.sleep(0.3)
+
+    submit_thread.join()
 
 fin_ts   = datetime.now()
 duracion = round((fin_ts - inicio_ts).total_seconds(), 1)
@@ -277,7 +337,7 @@ lineas = [
     f"| **Fecha** | {fin_ts.strftime('%Y-%m-%d %H:%M:%S')} |",
     f"| **Total productos** | {TOTAL} |",
     f"| **Idioma / Tono / País** | Español / Técnico / Colombia |",
-    f"| **Concurrencia** | {GROQ_MAX_WORKERS} hilos simultáneos |",
+    f"| **Concurrencia** | {STRESS_MAX_WORKERS} hilos | delay {STRESS_DELAY}s entre envíos |",
     f"| **Tiempo total** | {duracion} segundos ({duracion/60:.1f} minutos) |",
     f"| **Procesados OK** | {ok_count} / {TOTAL} |",
     f"| **Errores / Fallos** | {errores_count} / {TOTAL} |",
@@ -307,20 +367,20 @@ errores_lista = [
     if resultados[i] and resultados[i].startswith("Error:")
 ]
 
-if errores_lista:
+if fallidos_log:
     lineas += [
         "",
         "---",
         "",
-        f"## Errores detectados ({len(errores_lista)} de {TOTAL})",
+        f"## Productos fallidos ({len(fallidos_log)} de {TOTAL})",
         "",
         "| # | Producto | Error |",
         "|:--:|---------|-------|",
     ]
-    for idx, nombre, err in errores_lista[:50]:  # máximo 50 en el reporte
-        lineas.append(f"| {idx+1} | {nombre} | `{err[:100]}` |")
-    if len(errores_lista) > 50:
-        lineas.append(f"\n*... y {len(errores_lista) - 50} errores más (omitidos para brevedad)*")
+    for item in fallidos_log[:50]:  # máximo 50 en el reporte
+        lineas.append(f"| {item['idx']+1} | {item['nombre']} | `{item['error'][:100]}` |")
+    if len(fallidos_log) > 50:
+        lineas.append(f"\n*... y {len(fallidos_log) - 50} errores más (omitidos para brevedad)*")
 else:
     lineas += [
         "",
