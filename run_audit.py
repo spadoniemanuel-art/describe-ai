@@ -46,29 +46,9 @@ from app import generar_descripcion
 # ══════════════════════════════════════════════════════════════════════════════
 PRODUCTOS = [
     {
-        "nombre":          "Zapatilla Running Pro X",
-        "categoria":       "Calzado deportivo",
-        "caracteristicas": "suela amortiguada malla transpirable talle 38-46",
-    },
-    {
-        "nombre":          "Campera Impermeable Urban",
-        "categoria":       "Ropa de abrigo",
-        "caracteristicas": "material impermeable capucha desmontable bolsillos con cierre",
-    },
-    {
-        "nombre":          "Mochila Urbana 30L",
-        "categoria":       "Accesorios",
-        "caracteristicas": "compartimento laptop 15 pulgadas puerto USB lateral reforzado",
-    },
-    {
-        "nombre":          "Auriculares Bluetooth Pro",
-        "categoria":       "Electronica",
-        "caracteristicas": "cancelacion activa de ruido 40hs de bateria carga rapida",
-    },
-    {
-        "nombre":          "Reloj Inteligente FitTrack",
-        "categoria":       "Tecnologia wearable",
-        "caracteristicas": "monitor cardiaco GPS integrado resistente al agua 5ATM",
+        "nombre":          "Martillo de Carpintero TotalMax",
+        "categoria":       "Herramientas de construccion",
+        "caracteristicas": "mango de fibra de vidrio cabeza de acero forjado uña curva para sacar clavos agarre ergonomico antideslizante",
     },
 ]
 

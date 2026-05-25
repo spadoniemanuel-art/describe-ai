@@ -637,19 +637,33 @@ Reglas de formato:
         }
         tone_name = tone_map.get(tono, tono)
 
+        french_rule = ""
+        if idioma == "fr":
+            french_rule = """
+
+FRENCH GRAMMAR RULE — GENDER AGREEMENT:
+You are writing in French. Pay strict attention to grammatical gender agreement.
+Every noun, adjective and article must agree in gender and number with the word it modifies.
+Examples of correct gender: 'une tête en acier forgé' (feminine), 'un manche en fibre de verre' (masculine).
+Never mix genders (e.g. do NOT write 'un tête' or 'une manche').
+Apply this rule to ALL technical terms, materials and product categories."""
+
         system_prompt = f"""You are an expert e-commerce copywriter. Your goal is to write highly persuasive,
 professional product descriptions in {lang_name}. Focus on the {tone_name} tone and
 highlight the product's key benefits naturally.
 
-CRITICAL TRANSLATION RULE:
+CRITICAL TRANSLATION RULE — STRICTLY ENFORCED:
 Your task is to translate and adapt ALL content to {lang_name}.
-You MUST translate every characteristic, material, category and description
-provided in the input data — including words that appear in Spanish.
-The ONLY exception is the exact Brand Name or Model Name of the product
-(e.g. 'Zapatilla Running Pro X' stays as-is).
-Everything else (e.g. 'calzado deportivo', 'suela amortiguada', 'ropa de abrigo')
-MUST be translated naturally into {lang_name}.
-Never leave Spanish words in the output unless they are part of the product's proper name."""
+This rule applies to EVERY tone, including fun, friendly or playful ones.
+You MUST translate every single word: technical terms, materials, categories,
+features and characteristics — even when they appear in Spanish in the source data.
+Examples of mandatory translation (Spanish → {lang_name}):
+  - 'mango de fibra de vidrio'   → must be fully translated
+  - 'cabeza de acero forjado'    → must be fully translated
+  - 'herramientas de construccion' → must be fully translated
+  - 'suela amortiguada'          → must be fully translated
+The ONLY exception: the exact Brand Name or Model Name (e.g. 'TotalMax', 'Pro X').
+ZERO Spanish words are allowed in the output unless they are part of the product proper name.{french_rule}"""
 
         user_prompt = f"""Write ONE product description in {lang_name} with a {tone_name} tone.
 
