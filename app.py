@@ -574,8 +574,8 @@ async def prueba_gratis(
     logger.info(f"[TRIAL] Completado para IP={ip}")
 
     # — Devolver CSV como descarga —
-    output = io.BytesIO()
-    df.to_csv(output, index=False, encoding="utf-8-sig", errors="replace")
+    csv_str = df.to_csv(index=False)
+    output = io.BytesIO(b'\xef\xbb\xbf' + csv_str.encode('utf-8'))
     output.seek(0)
     return StreamingResponse(
         output,
@@ -842,8 +842,9 @@ def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: s
 
         df['descripcion_generada'] = descripciones
 
-        output = io.BytesIO()
-        df.to_csv(output, index=False, encoding='utf-8-sig', errors='replace')
+        csv_str = df.to_csv(index=False)
+        csv_bytes = b'\xef\xbb\xbf' + csv_str.encode('utf-8')
+        output = io.BytesIO(csv_bytes)
         output.seek(0)
         enviar_csv(email, tienda, output.read())
         logger.info(f"[CSV] Email enviado a {email} con {total} descripciones completadas")
