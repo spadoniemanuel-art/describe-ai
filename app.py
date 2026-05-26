@@ -597,14 +597,6 @@ def generar_descripcion(producto: dict, tono: str, idioma: str,
     Backoff solo ante 429 real: 3s → 6s → 12s (3 intentos).
     """
     nombre = producto.get('nombre', '(sin nombre)')
-    client = OpenAI(
-        api_key=OPENROUTER_KEY,
-        base_url="https://openrouter.ai/api/v1",
-        default_headers={
-            "HTTP-Referer": "https://describeai.store",
-            "X-Title":      "DescribeAI",
-        },
-    )
 
     if idioma == "es":
         # Español: localización regional completa
@@ -693,6 +685,14 @@ Format rules:
 
     for intento in range(MAX_INTENTOS):
         try:
+            client = OpenAI(
+                api_key=OPENROUTER_KEY,
+                base_url="https://openrouter.ai/api/v1",
+                default_headers={
+                    "HTTP-Referer": "https://describeai.store",
+                    "X-Title":      "DescribeAI",
+                },
+            )
             with AI_SEMAPHORE:
                 logger.info(f"[AI] Llamando OpenRouter para '{nombre}' (intento {intento + 1}/{MAX_INTENTOS})")
                 response = client.chat.completions.create(
