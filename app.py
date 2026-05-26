@@ -40,7 +40,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH  = os.path.join(BASE_DIR, "codes.db")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-OPENROUTER_KEY  = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_KEY  = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
 ADMIN_PASSWORD  = os.getenv("ADMIN_PASSWORD", "admin123")
 MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
 SITE_URL        = os.getenv("SITE_URL", "https://describeai.store")
@@ -155,7 +155,7 @@ async def success_page():
 @app.get("/test-ai")
 async def test_ai():
     """Endpoint de diagnóstico — verifica conexión con OpenRouter."""
-    key = os.getenv("OPENROUTER_API_KEY")
+    key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
     key_status = f"SET (empieza con: {key[:8]}...)" if key else "NO ENCONTRADA"
     try:
         client = OpenAI(
