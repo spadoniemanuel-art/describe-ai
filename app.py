@@ -519,14 +519,18 @@ async def prueba_gratis(
                    f"Para procesar más, elegí un plan pago."
         )
 
-    # — Procesar con Groq (sincrónico para devolver descarga) —
+    # — Procesar con IA (sincrónico para devolver descarga) —
     pais_limpio = pais.strip() or "Neutro"
     logger.info(f"[TRIAL] Procesando {len(df)} productos para IP={ip} | tone={tone} | lang={lang} | pais={pais_limpio}")
     rows = [row.to_dict() for _, row in df.iterrows()]
     descripciones = []
-    for producto in rows:
-        desc = generar_descripcion(producto, tone, lang, pais_limpio)
-        descripciones.append(desc)
+    try:
+        for producto in rows:
+            desc = generar_descripcion(producto, tone, lang, pais_limpio)
+            descripciones.append(desc)
+    except Exception as exc:
+        logger.error(f"[TRIAL] Error generando descripciones para IP={ip}: {exc}")
+        raise HTTPException(500, detail=f"Error al generar descripciones. Intentá de nuevo en unos minutos.")
     df["descripcion_generada"] = descripciones
 
     # — Registrar IP como usada —

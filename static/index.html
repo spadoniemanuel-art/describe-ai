@@ -661,8 +661,12 @@
         const res = await fetch('/prueba-gratis', { method: 'POST', body: data });
 
         if (!res.ok) {
-          const json = await res.json();
-          throw new Error(json.detail || 'Error del servidor');
+          let msg = 'Error del servidor. Intentá de nuevo en unos minutos.';
+          try {
+            const json = await res.json();
+            msg = json.detail || msg;
+          } catch (_) {}
+          throw new Error(msg);
         }
 
         // Descargar el CSV resultante
