@@ -152,6 +152,25 @@ async def success_page():
     return FileResponse(os.path.join(BASE_DIR, "static", "success.html"))
 
 
+@app.get("/test-ai")
+async def test_ai():
+    """Endpoint de diagnóstico — verifica conexión con OpenRouter."""
+    try:
+        client = OpenAI(
+            api_key=OPENROUTER_KEY,
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={"HTTP-Referer": "https://describeai.store", "X-Title": "DescribeAI"},
+        )
+        response = client.chat.completions.create(
+            model=AI_MODEL,
+            messages=[{"role": "user", "content": "Say OK"}],
+            max_tokens=5,
+        )
+        return {"status": "ok", "model": AI_MODEL, "response": response.choices[0].message.content}
+    except Exception as exc:
+        return {"status": "error", "type": type(exc).__name__, "detail": str(exc)}
+
+
 @app.get("/admin")
 async def admin(request: Request):
     token = request.cookies.get("admin_session")
