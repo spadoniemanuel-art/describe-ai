@@ -727,9 +727,11 @@ Format rules:
 def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: str,
                  pais_destino: str = "Neutro"):
     """
-    Procesa el CSV con ThreadPoolExecutor (hasta GROQ_MAX_WORKERS filas en paralelo).
-    El GROQ_SEMAPHORE limita las llamadas simultáneas reales a Groq globalmente.
-    Soporta localización dinámica por pais_destino.
+    Procesa el CSV con sistema de fallback automático en dos modos:
+      - Modo Rápido   : ThreadPoolExecutor con GROQ_MAX_WORKERS hilos (concurrente).
+      - Modo Económico: 1 hilo + 2s de delay entre llamadas (se activa al detectar
+                        2 errores consecutivos por rate limit o cuota agotada).
+    La transición es automática y transparente para el usuario final.
     """
     try:
         df = pd.read_csv(io.BytesIO(contenido))
@@ -740,16 +742,48 @@ def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: s
         total = len(df)
         logger.info(
             f"[CSV] Iniciando procesamiento de {total} productos para {email} "
-            f"| tienda={tienda} | pais_destino='{pais_destino}'"
+            f"| tienda={tienda} | pais_destino='{pais_destino}' | modo=Rapido"
         )
 
         rows          = [row.to_dict() for _, row in df.iterrows()]
         descripciones = [None] * total
         completados   = 0
 
+        # ── Estado del fallback (local por job, thread-safe) ──────────────────
+        fallback_mode   = threading.Event()   # activo = modo económico
+        api_lock        = threading.Lock()    # garantiza 1 llamada a la vez en modo económico
+        errores_consec  = {"n": 0}            # contador de errores consecutivos
+        UMBRAL_FALLBACK = 2                   # errores para activar fallback
+
         def _procesar_fila(args: tuple) -> tuple:
             idx, producto = args
-            return idx, generar_descripcion(producto, tono, idioma, pais_destino)
+
+            if fallback_mode.is_set():
+                # ── Modo Económico: secuencial con delay ──────────────────────
+                with api_lock:
+                    time.sleep(2)
+                    desc = generar_descripcion(producto, tono, idioma, pais_destino)
+            else:
+                # ── Modo Rápido: concurrente ──────────────────────────────────
+                desc = generar_descripcion(producto, tono, idioma, pais_destino)
+
+                with api_lock:
+                    if desc.startswith("Error:"):
+                        errores_consec["n"] += 1
+                        if errores_consec["n"] >= UMBRAL_FALLBACK and not fallback_mode.is_set():
+                            fallback_mode.set()
+                            logger.warning(
+                                f"[FALLBACK] ⚠ Modo Económico activado para {email} "
+                                f"tras {UMBRAL_FALLBACK} errores — cambiando a 1 hilo + 2s delay"
+                            )
+                        # Reintentar este producto ya en modo económico
+                        if fallback_mode.is_set():
+                            time.sleep(5)
+                            desc = generar_descripcion(producto, tono, idioma, pais_destino)
+                    else:
+                        errores_consec["n"] = 0   # éxito → resetear contador
+
+            return idx, desc
 
         with ThreadPoolExecutor(max_workers=GROQ_MAX_WORKERS) as executor:
             futures = {
@@ -761,11 +795,17 @@ def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: s
                     idx, desc = future.result()
                     descripciones[idx] = desc
                     completados += 1
-                    logger.info(f"[CSV] Progreso: {completados}/{total} para {email}")
+                    modo = "ECO" if fallback_mode.is_set() else "RAPID"
+                    logger.info(f"[CSV][{modo}] Progreso: {completados}/{total} para {email}")
                 except Exception as exc:
                     logger.error(f"[CSV] Error en fila {futures[future]}: {exc}")
                     descripciones[futures[future]] = "Error: no se pudo generar la descripcion"
                     completados += 1
+
+        if fallback_mode.is_set():
+            logger.info(f"[CSV] Job completado en Modo Económico para {email}")
+        else:
+            logger.info(f"[CSV] Job completado en Modo Rápido para {email}")
 
         df['descripcion_generada'] = descripciones
 
