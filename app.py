@@ -156,34 +156,6 @@ async def success_page():
     return FileResponse(os.path.join(BASE_DIR, "static", "success.html"))
 
 
-@app.get("/debug-env")
-async def debug_env():
-    """Muestra todas las variables de entorno disponibles (solo nombres)."""
-    keys = sorted(os.environ.keys())
-    ai_keys = {k: os.environ[k][:6] + "..." for k in keys if "API" in k or "KEY" in k or "TOKEN" in k or "SECRET" in k}
-    return {"total_vars": len(keys), "all_keys": keys, "api_related": ai_keys}
-
-
-@app.get("/test-ai")
-async def test_ai():
-    """Endpoint de diagnóstico — verifica conexión con OpenRouter."""
-    key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY") or os.getenv("GROQ_API_KEY")
-    key_status = f"SET (empieza con: {key[:8]}...)" if key else "NO ENCONTRADA"
-    try:
-        client = OpenAI(
-            api_key=key,
-            base_url="https://openrouter.ai/api/v1",
-            default_headers={"HTTP-Referer": "https://describeai.store", "X-Title": "DescribeAI"},
-        )
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[{"role": "user", "content": "Say OK"}],
-            max_tokens=5,
-        )
-        return {"status": "ok", "model": AI_MODEL, "key": key_status, "response": response.choices[0].message.content}
-    except Exception as exc:
-        return {"status": "error", "key": key_status, "type": type(exc).__name__, "detail": str(exc)}
-
 
 @app.get("/admin")
 async def admin(request: Request):
