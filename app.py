@@ -152,6 +152,14 @@ async def success_page():
     return FileResponse(os.path.join(BASE_DIR, "static", "success.html"))
 
 
+@app.get("/debug-env")
+async def debug_env():
+    """Muestra todas las variables de entorno disponibles (solo nombres)."""
+    keys = sorted(os.environ.keys())
+    ai_keys = {k: os.environ[k][:6] + "..." for k in keys if "API" in k or "KEY" in k or "TOKEN" in k or "SECRET" in k}
+    return {"total_vars": len(keys), "all_keys": keys, "api_related": ai_keys}
+
+
 @app.get("/test-ai")
 async def test_ai():
     """Endpoint de diagnóstico — verifica conexión con OpenRouter."""
