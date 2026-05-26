@@ -33,31 +33,34 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
 # ── Verificar key ──────────────────────────────────────────────────────────────
-if not os.getenv("GROQ_API_KEY"):
-    print("\n❌  Falta la GROQ_API_KEY.")
-    print("    CMD:        set GROQ_API_KEY=gsk_tukey")
-    print("    PowerShell: $env:GROQ_API_KEY='gsk_tukey'\n")
+if not os.getenv("OPENROUTER_API_KEY"):
+    print("\n❌  Falta la OPENROUTER_API_KEY.")
+    print("    CMD:        set OPENROUTER_API_KEY=sk-or-xxxx")
+    print("    PowerShell: $env:OPENROUTER_API_KEY='sk-or-xxxx'\n")
     sys.exit(1)
 
 # ── Test rápido de conexión ────────────────────────────────────────────────────
-from groq import Groq as _Groq
+from openai import OpenAI as _OpenAI
 try:
-    _Groq(api_key=os.getenv("GROQ_API_KEY")).chat.completions.create(
-        model="llama-3.3-70b-versatile",
+    _OpenAI(
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+        base_url="https://openrouter.ai/api/v1",
+    ).chat.completions.create(
+        model="meta-llama/llama-3.3-70b-instruct",
         messages=[{"role": "user", "content": "Say OK"}],
         max_tokens=5,
     )
-    print("✅  Conexión Groq OK\n")
+    print("✅  Conexión OpenRouter OK\n")
 except Exception as _e:
-    print(f"\n❌  Error Groq: {type(_e).__name__}: {_e}")
-    print("    Verificá que la GROQ_API_KEY sea válida.\n")
+    print(f"\n❌  Error OpenRouter: {type(_e).__name__}: {_e}")
+    print("    Verificá que la OPENROUTER_API_KEY sea válida.\n")
     sys.exit(1)
 
 # ── Silenciar logs de app.py ───────────────────────────────────────────────────
 logging.disable(logging.CRITICAL)
 
 from app import generar_descripcion
-from groq import RateLimitError as _RateLimitError
+from openai import RateLimitError as _RateLimitError
 
 # ── Rate limiter para stress test (independiente del backend) ─────────────────
 STRESS_MAX_WORKERS = 5      # 5 hilos simultáneos

@@ -30,10 +30,27 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
 # ── Verificar key antes de importar app ───────────────────────────────────────
-if not os.getenv("GROQ_API_KEY"):
-    print("\n❌  Falta la GROQ_API_KEY.")
-    print("    CMD:        set GROQ_API_KEY=gsk_tukey")
-    print("    PowerShell: $env:GROQ_API_KEY='gsk_tukey'\n")
+if not os.getenv("OPENROUTER_API_KEY"):
+    print("\n❌  Falta la OPENROUTER_API_KEY.")
+    print("    CMD:        set OPENROUTER_API_KEY=sk-or-xxxx")
+    print("    PowerShell: $env:OPENROUTER_API_KEY='sk-or-xxxx'\n")
+    sys.exit(1)
+
+# ── Test rápido de conexión con OpenRouter antes de arrancar ──────────────────
+from openai import OpenAI as _OpenAI
+try:
+    _OpenAI(
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+        base_url="https://openrouter.ai/api/v1",
+    ).chat.completions.create(
+        model="meta-llama/llama-3.3-70b-instruct",
+        messages=[{"role": "user", "content": "Say OK"}],
+        max_tokens=5,
+    )
+    print("✅  Conexión OpenRouter OK — modelo responde correctamente.\n")
+except Exception as _e:
+    print(f"\n❌  Error de conexión con OpenRouter: {type(_e).__name__}: {_e}")
+    print("    Verificá que la OPENROUTER_API_KEY sea válida.\n")
     sys.exit(1)
 
 # ── Silenciar logs de app.py ───────────────────────────────────────────────────

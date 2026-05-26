@@ -1,6 +1,6 @@
 fastapi==0.136.1
 uvicorn==0.46.0
-groq==1.1.2
+openai==1.82.1
 pandas==2.3.3
 python-multipart==0.0.27
 resend==2.30.1

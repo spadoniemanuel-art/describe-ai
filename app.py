@@ -1,14 +1,13 @@
 """
 DescribeAI SaaS — Backend
-Groq API (Llama 3) + MercadoPago Checkout Pro + Resend + SQLite
+OpenRouter (Llama 3.3 70B) + MercadoPago Checkout Pro + Resend + SQLite
 Deploy en Railway
 """
 
 from fastapi import FastAPI, UploadFile, Form, BackgroundTasks, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
-from groq import Groq
-import groq as groq_lib
+from openai import OpenAI, RateLimitError as OpenAIRateLimitError
 import mercadopago
 import pandas as pd
 import io
@@ -32,16 +31,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger("describeai")
 
-# ── Concurrencia Groq ──────────────────────────────────────────────────────────
-# Máximo 5 llamadas simultáneas a Groq en todo el proceso (global entre jobs)
-GROQ_SEMAPHORE   = threading.Semaphore(5)
-GROQ_MAX_WORKERS = 5   # hilos por job de CSV
+# ── Concurrencia — Modo Fórmula 1 (OpenRouter, plan pago) ────────────────────
+AI_SEMAPHORE   = threading.Semaphore(10)   # 10 llamadas simultáneas máximo
+AI_MAX_WORKERS = 10                         # hilos por job de CSV
+AI_MODEL       = "meta-llama/llama-3.3-70b-instruct"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH  = os.path.join(BASE_DIR, "codes.db")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-GROQ_KEY        = os.getenv("GROQ_API_KEY")
+OPENROUTER_KEY  = os.getenv("OPENROUTER_API_KEY")
 ADMIN_PASSWORD  = os.getenv("ADMIN_PASSWORD", "admin123")
 MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
 SITE_URL        = os.getenv("SITE_URL", "https://describeai.store")
@@ -585,16 +584,23 @@ async def procesar(
     return {"status": "ok", "message": f"Procesando {len(df)} productos. Te llega por email en minutos."}
 
 
-# ── Generación con Groq ────────────────────────────────────────────────────────
+# ── Generación con OpenRouter ─────────────────────────────────────────────────
 def generar_descripcion(producto: dict, tono: str, idioma: str,
                         pais_destino: str = "Neutro") -> str:
     """
-    Llama a Groq con semáforo global y exponential backoff en Rate Limit (429).
-    Soporta localización dinámica por país vía system prompt.
-    Intentos: hasta 4. Esperas: 2s → 4s → 8s → 16s.
+    Llama a OpenRouter (Llama 3.3 70B) con semáforo global.
+    Sin sleeps en el camino feliz — máxima velocidad con plan pago.
+    Backoff solo ante 429 real: 3s → 6s → 12s (3 intentos).
     """
     nombre = producto.get('nombre', '(sin nombre)')
-    client = Groq(api_key=GROQ_KEY)
+    client = OpenAI(
+        api_key=OPENROUTER_KEY,
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={
+            "HTTP-Referer": "https://describeai.store",
+            "X-Title":      "DescribeAI",
+        },
+    )
 
     if idioma == "es":
         # Español: localización regional completa
@@ -679,18 +685,14 @@ Format rules:
 - Only the description, no titles or additional explanations
 - The entire output MUST be written exclusively in {lang_name}"""
 
-    MAX_INTENTOS = 4
+    MAX_INTENTOS = 3
 
     for intento in range(MAX_INTENTOS):
         try:
-            logger.info(
-                f"[GROQ] Adquiriendo semaforo para '{nombre}' | pais='{pais_destino}' "
-                f"(intento {intento + 1}/{MAX_INTENTOS})"
-            )
-            with GROQ_SEMAPHORE:
-                logger.info(f"[GROQ] Semaforo adquirido — llamando API para '{nombre}'")
+            with AI_SEMAPHORE:
+                logger.info(f"[AI] Llamando OpenRouter para '{nombre}' (intento {intento + 1}/{MAX_INTENTOS})")
                 response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model=AI_MODEL,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user",   "content": user_prompt},
@@ -699,28 +701,22 @@ Format rules:
                     temperature=0.7,
                 )
             result = response.choices[0].message.content.strip()
-            logger.info(f"[GROQ] Exito para '{nombre}' | pais='{pais_destino}' en intento {intento + 1}")
+            logger.info(f"[AI] OK '{nombre}' en intento {intento + 1}")
             return result
 
-        except groq_lib.RateLimitError:
-            wait = 2 ** (intento + 1)   # 2, 4, 8, 16
-            logger.warning(
-                f"[GROQ] Rate limit (429) para '{nombre}' — intento {intento + 1}/{MAX_INTENTOS}. "
-                f"Reintentando en {wait}s con exponential backoff..."
-            )
+        except OpenAIRateLimitError:
+            wait = 3 * (2 ** intento)   # 3s → 6s → 12s
+            logger.warning(f"[AI] 429 para '{nombre}' — esperando {wait}s (intento {intento + 1}/{MAX_INTENTOS})")
             if intento < MAX_INTENTOS - 1:
                 time.sleep(wait)
 
         except Exception as exc:
-            wait = 2 ** intento          # 1, 2, 4, 8
-            logger.warning(
-                f"[GROQ] Error inesperado para '{nombre}' — intento {intento + 1}/{MAX_INTENTOS}: {exc}. "
-                f"Reintentando en {wait}s..."
-            )
+            wait = 2 * (intento + 1)    # 2s → 4s → 6s
+            logger.warning(f"[AI] Error para '{nombre}': {exc} — reintentando en {wait}s")
             if intento < MAX_INTENTOS - 1:
                 time.sleep(wait)
 
-    logger.error(f"[GROQ] Fallo tras {MAX_INTENTOS} intentos para '{nombre}'. Devolviendo placeholder.")
+    logger.error(f"[AI] Fallo tras {MAX_INTENTOS} intentos para '{nombre}'.")
     return "Error: no se pudo generar la descripcion"
 
 
@@ -785,7 +781,7 @@ def procesar_csv(contenido: bytes, email: str, tienda: str, tono: str, idioma: s
 
             return idx, desc
 
-        with ThreadPoolExecutor(max_workers=GROQ_MAX_WORKERS) as executor:
+        with ThreadPoolExecutor(max_workers=AI_MAX_WORKERS) as executor:
             futures = {
                 executor.submit(_procesar_fila, (i, row)): i
                 for i, row in enumerate(rows)
