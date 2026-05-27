@@ -601,23 +601,37 @@ def generar_descripcion(producto: dict, tono: str, idioma: str,
 
     if idioma == "es":
         # Español: localización regional completa
+        regla_tono = ""
+        if tono in ("tecnico", "profesional"):
+            regla_tono = """
+
+REGLA DE TONO TECNICO — OBLIGATORIA:
+- El tono seleccionado es tecnico/profesional. Esto tiene prioridad sobre cualquier localizacion regional.
+- PROHIBIDO usar expresiones coloquiales, jerga informal o modismos aunque el pais de destino sea informal.
+- El vocabulario debe ser preciso, objetivo y orientado a especificaciones tecnicas y beneficios concretos.
+- Si corresponde usar terminos regionales (ej: 'parlante' en Argentina), usarlos, pero sin jerga ni expresiones de la calle."""
+
         system_prompt = f"""Actua como un experto copywriter de e-commerce local. Tu objetivo es redactar descripciones altamente vendedoras, persuasivas y profesionales para el mercado de un pais especifico.
+
+REGLA CRITICA DE IDIOMA:
+- La salida DEBE estar 100% en espanol. Cero palabras en ingles, portugues u otro idioma.
+- Esto incluye terminos tecnicos, categorias y caracteristicas del producto.
 
 REGLA CRITICA DE LOCALIZACION LINGUISTICA:
 - El pais de destino de este producto es: {pais_destino}.
 - Debes adaptar de forma organica y natural todo el vocabulario, nombres de prendas, modismos comerciales y giros linguisticos al espanol nativo de ese pais especifico.
 - Ejemplos de adaptacion automatica segun el pais recibido:
-  * Si es 'Argentina' o 'Uruguay': usa voseo sutil y terminos como remera, campera, zapatillas.
-  * Si es 'Mexico': usa playera, chamarra, tenis.
+  * Si es 'Argentina' o 'Uruguay': usa voseo sutil y terminos como remera, campera, zapatillas, parlante.
+  * Si es 'Mexico': usa playera, chamarra, tenis, bocina.
   * Si es 'Chile': usa polera, chaqueta, zapatillas.
   * Si es 'Peru': usa polo, casaca, zapatillas.
-  * Si es 'Colombia': usa camiseta, chaqueta, tenis.
-  * Si es 'Espana': usa camiseta, chaqueta, zapatillas, ordenador, etc.
+  * Si es 'Colombia': usa camiseta, chaqueta, tenis, parlante.
+  * Si es 'Espana': usa camiseta, chaqueta, zapatillas, ordenador, altavoz.
   * Si es 'Neutro': mantene un espanol latinoamericano estandar, neutro, profesional y libre de localismos.
-- IMPORTANTE: No exageres usando jerga callejera o vulgar. El tono debe ser el de una tienda de e-commerce profesional, confiable y nativa de ese pais."""
+- IMPORTANTE: No exageres usando jerga callejera o vulgar. El tono debe ser el de una tienda de e-commerce profesional, confiable y nativa de ese pais.{regla_tono}"""
 
         user_prompt = f"""Genera UNA descripcion de producto en tono {tono} para el mercado de {pais_destino}.
-Idioma: espanol
+Idioma: espanol (unicamente)
 
 Producto:
 - Nombre: {producto.get('nombre', '')}
