@@ -19,6 +19,7 @@ import hashlib
 import hmac
 import uuid
 import secrets
+import re
 import threading
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -654,20 +655,62 @@ Reglas de formato:
         }
         tone_name = tone_map.get(tono, tono)
 
-        french_rule = ""
+        lang_extra = ""
+        if idioma == "pt":
+            lang_extra = """
+
+PORTUGUESE MANDATORY TRANSLATION — STRICTLY ENFORCED:
+The input data is in Spanish. You MUST translate EVERYTHING to Brazilian Portuguese.
+This includes the product name — translate Spanish descriptive words in the name too.
+MANDATORY vocabulary replacements (Spanish → Portuguese):
+  - 'Taladro Inalámbrico'  → 'Furadeira sem fio'
+  - 'Martillo de Carpintero' → 'Martelo de carpinteiro'
+  - 'Cinta Métrica'        → 'Trena'
+  - 'Llave Inglesa'        → 'Chave inglesa'
+  - 'Nivel de Burbuja'     → 'Nível de bolha'
+  - 'portabrocas'          → 'mandril'
+  - 'maletín'              → 'maleta / estojo'
+  - 'freno automático'     → 'trava automática'
+  - 'gancho magnético'     → 'gancho magnético' (same) or 'presilha magnética'
+  - 'herramientas de medición' → 'ferramentas de medição'
+  - 'herramientas de mano' → 'ferramentas manuais'
+  - 'longitud'             → 'comprimento'
+  - 'resistente al agua'   → 'resistente à água'
+  - 'sonido'               → 'som'
+  - 'aluminio'             → 'alumínio'
+  - 'batería'              → 'bateria'
+ZERO palabras en español están permitidas en la salida."""
+
         if idioma == "fr":
-            french_rule = """
+            lang_extra = """
+
+FRENCH MANDATORY TRANSLATION — STRICTLY ENFORCED:
+The input data is in Spanish. You MUST translate EVERYTHING to French.
+This includes the product name — translate Spanish descriptive words in the name too.
+MANDATORY vocabulary replacements (Spanish → French):
+  - 'Taladro Inalámbrico'  → 'Perceuse sans fil'
+  - 'Martillo de Carpintero' → 'Marteau de charpentier'
+  - 'Cinta Métrica'        → 'Mètre ruban'
+  - 'Llave Inglesa'        → 'Clé à molette'
+  - 'Nivel de Burbuja'     → 'Niveau à bulle'
+  - 'portabrocas'          → 'mandrin'
+  - 'maletín'              → 'mallette'
+  - 'freno automático'     → 'frein automatique'
+  - 'gancho magnético'     → 'crochet magnétique'
+  - 'herramientas de medición' → 'outils de mesure'
+  - 'herramientas de mano' → 'outils à main'
+  - 'longitud'             → 'longueur'
+  - 'burbuja'              → 'bulle'
+  - 'aluminio'             → 'aluminium'
+  - 'uña curva'            → 'griffe courbée'
+  - 'mango'                → 'manche'
+  - 'resistente al agua'   → 'résistant à l\'eau'
+ZERO mots en espagnol sont autorisés dans la sortie.
 
 FRENCH GRAMMAR RULE — GENDER AGREEMENT:
-You are writing in French. Pay strict attention to grammatical gender agreement.
-Every noun, adjective and article must agree in gender and number with the word it modifies.
-Examples of correct gender: 'une tête en acier forgé' (feminine), 'un manche en fibre de verre' (masculine).
-Never mix genders (e.g. do NOT write 'un tête' or 'une manche').
-Apply this rule to ALL technical terms, materials and product categories."""
-
-        pt_extra = ""
-        if idioma == "pt":
-            pt_extra = "\nPORTUGUESE SPECIFIC RULE: ZERO palavras em espanhol são permitidas. Exemplos obrigatórios: 'sonido' → 'som', 'batería' → 'bateria', 'parlante' → 'caixa de som', 'resistente al agua' → 'resistente à água'."
+Pay strict attention to grammatical gender. Every noun, adjective and article must agree
+in gender and number. Examples: 'une tête en acier forgé' (fém.), 'un manche en fibre de verre' (masc.).
+Never write 'un tête' or 'une manche'."""
 
         system_prompt = f"""You are an expert e-commerce copywriter. Your goal is to write highly persuasive,
 professional product descriptions in {lang_name}. Focus on the {tone_name} tone and
@@ -678,19 +721,9 @@ Your task is to translate and adapt ALL content to {lang_name}.
 This rule applies to EVERY tone, including fun, friendly or playful ones.
 You MUST translate every single word: technical terms, materials, categories,
 features and characteristics — even when they appear in Spanish in the source data.
-Examples of mandatory translation (Spanish → {lang_name}):
-  - 'mango de fibra de vidrio'   → must be fully translated
-  - 'cabeza de acero forjado'    → must be fully translated
-  - 'herramientas de construccion' → must be fully translated
-  - 'suela amortiguada'          → must be fully translated
-The ONLY exception: proper brand names and model numbers (e.g. 'JBL', 'Charge 4', 'Nike', 'TotalMax').
-Generic Spanish nouns MUST ALWAYS be translated, even when they appear in the product name.
-Examples of words that are NOT brand names and MUST be translated:
-  - 'Parlante' → speaker / haut-parleur / caixa de som
-  - 'Bocina'   → speaker / horn
-  - 'Silla'    → chair / chaise / cadeira
-  - 'Mesa'     → table / mesa (PT only) / table
-ZERO Spanish words are allowed in the output unless they are proper brand or model names.{pt_extra}{french_rule}"""
+The ONLY exception: proper brand names and model numbers (e.g. 'Bosch', 'Stanley', '18V', '20oz').
+Generic Spanish descriptive words in product names MUST be translated (e.g. 'Taladro' → drill/furadeira/perceuse).
+ZERO Spanish words are allowed in the output unless they are proper brand or model names.{lang_extra}"""
 
         user_prompt = f"""Write ONE product description in {lang_name} with a {tone_name} tone.
 
@@ -730,6 +763,8 @@ Format rules:
                     temperature=0.7,
                 )
             result = response.choices[0].message.content.strip()
+            # Fix tags HTML rotos: <b-Palabra → <b>Palabra
+            result = re.sub(r'<b-', '<b>', result)
             logger.info(f"[AI] OK '{nombre}' en intento {intento + 1}")
             return result
 
