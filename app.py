@@ -659,57 +659,51 @@ Reglas de formato:
         if idioma == "pt":
             lang_extra = """
 
-PORTUGUESE MANDATORY TRANSLATION — STRICTLY ENFORCED:
-The input data is in Spanish. You MUST translate EVERYTHING to Brazilian Portuguese.
-This includes the product name — translate Spanish descriptive words in the name too.
-MANDATORY vocabulary replacements (Spanish → Portuguese):
-  - 'Taladro Inalámbrico'  → 'Furadeira sem fio'
-  - 'Martillo de Carpintero' → 'Martelo de carpinteiro'
-  - 'Cinta Métrica'        → 'Trena'
-  - 'Llave Inglesa'        → 'Chave inglesa'
-  - 'Nivel de Burbuja'     → 'Nível de bolha'
-  - 'portabrocas'          → 'mandril'
-  - 'maletín'              → 'maleta / estojo'
-  - 'freno automático'     → 'trava automática'
-  - 'gancho magnético'     → 'gancho magnético' (same) or 'presilha magnética'
-  - 'herramientas de medición' → 'ferramentas de medição'
-  - 'herramientas de mano' → 'ferramentas manuais'
-  - 'longitud'             → 'comprimento'
-  - 'resistente al agua'   → 'resistente à água'
-  - 'sonido'               → 'som'
-  - 'aluminio'             → 'alumínio'
-  - 'batería'              → 'bateria'
-ZERO palabras en español están permitidas en la salida."""
+PORTUGUESE TRANSLATION — APPLY SILENTLY WITHOUT MENTIONING IT:
+Translate the input data from Spanish to Brazilian Portuguese. Do NOT explain, comment or
+mention the translation process — just write the description directly in Portuguese.
+Apply these translations automatically and silently:
+  'Taladro Inalámbrico' → 'Furadeira sem fio'
+  'Martillo de Carpintero' → 'Martelo de carpinteiro'
+  'Cinta Métrica' → 'Trena'   |   'Llave Inglesa' → 'Chave inglesa'
+  'Nivel de Burbuja' → 'Nível de bolha'
+  'portabrocas' → 'mandril'   |   'maletín' → 'estojo'
+  'freno automático' → 'trava automática'
+  'gancho magnético' → 'presilha magnética'
+  'herramientas de medición' → 'ferramentas de medição'
+  'herramientas de mano' → 'ferramentas manuais'
+  'longitud' → 'comprimento'  |   'aluminio' → 'alumínio'
+  'mango' → 'cabo'            |   'antideslizante' → 'antiderrapante'
+  'clavos' → 'pregos'         |   'uña' → 'garra'
+  'resistente al agua' → 'resistente à água'
+  'sonido' → 'som'            |   'batería' → 'bateria'
+ZERO palavras em espanhol na saída. Escreva diretamente a descrição, sem comentários."""
 
         if idioma == "fr":
             lang_extra = """
 
-FRENCH MANDATORY TRANSLATION — STRICTLY ENFORCED:
-The input data is in Spanish. You MUST translate EVERYTHING to French.
-This includes the product name — translate Spanish descriptive words in the name too.
-MANDATORY vocabulary replacements (Spanish → French):
-  - 'Taladro Inalámbrico'  → 'Perceuse sans fil'
-  - 'Martillo de Carpintero' → 'Marteau de charpentier'
-  - 'Cinta Métrica'        → 'Mètre ruban'
-  - 'Llave Inglesa'        → 'Clé à molette'
-  - 'Nivel de Burbuja'     → 'Niveau à bulle'
-  - 'portabrocas'          → 'mandrin'
-  - 'maletín'              → 'mallette'
-  - 'freno automático'     → 'frein automatique'
-  - 'gancho magnético'     → 'crochet magnétique'
-  - 'herramientas de medición' → 'outils de mesure'
-  - 'herramientas de mano' → 'outils à main'
-  - 'longitud'             → 'longueur'
-  - 'burbuja'              → 'bulle'
-  - 'aluminio'             → 'aluminium'
-  - 'uña curva'            → 'griffe courbée'
-  - 'mango'                → 'manche'
-  - 'resistente al agua'   → 'résistant à l\'eau'
-ZERO mots en espagnol sont autorisés dans la sortie.
+FRENCH TRANSLATION — APPLY SILENTLY WITHOUT MENTIONING IT:
+Translate the input data from Spanish to French. Do NOT explain, comment or mention
+the translation process — just write the description directly in French.
+Apply these translations automatically and silently:
+  'Taladro Inalámbrico' → 'Perceuse sans fil'
+  'Martillo de Carpintero' → 'Marteau de charpentier'
+  'Cinta Métrica' → 'Mètre ruban'   |   'Llave Inglesa' → 'Clé à molette'
+  'Nivel de Burbuja' → 'Niveau à bulle'
+  'portabrocas' → 'mandrin'         |   'maletín' → 'mallette'
+  'freno automático' → 'frein automatique'
+  'gancho magnético' → 'crochet magnétique'
+  'herramientas de medición' → 'outils de mesure'
+  'herramientas de mano' → 'outils à main'
+  'longitud' → 'longueur'           |   'aluminio' → 'aluminium'
+  'mango' → 'manche'                |   'antideslizante' → 'antidérapant'
+  'clavos' → 'clous'                |   'uña curva' → 'griffe courbée'
+  'burbuja' → 'bulle'               |   'resistente al agua' → 'résistant à l\'eau'
+ZERO mots en espagnol dans la sortie. Écrivez directement la description, sans commentaires.
 
-FRENCH GRAMMAR RULE — GENDER AGREEMENT:
-Pay strict attention to grammatical gender. Every noun, adjective and article must agree
-in gender and number. Examples: 'une tête en acier forgé' (fém.), 'un manche en fibre de verre' (masc.).
+FRENCH GRAMMAR — GENDER AGREEMENT:
+Every noun, adjective and article must agree in gender and number.
+Examples: 'une tête en acier forgé' (fém.), 'un manche en fibre de verre' (masc.).
 Never write 'un tête' or 'une manche'."""
 
         system_prompt = f"""You are an expert e-commerce copywriter. Your goal is to write highly persuasive,
