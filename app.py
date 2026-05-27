@@ -40,11 +40,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH  = os.path.join(BASE_DIR, "codes.db")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-OPENROUTER_KEY  = (
-    os.getenv("OPENAI_API_KEY")
-    or os.getenv("OPENROUTER_API_KEY")
-    or os.getenv("GROQ_API_KEY")   # reutilizamos la var existente en Railway
-)
+OPENROUTER_KEY  = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
 ADMIN_PASSWORD  = os.getenv("ADMIN_PASSWORD", "admin123")
 MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
 SITE_URL        = os.getenv("SITE_URL", "https://describeai.store")
