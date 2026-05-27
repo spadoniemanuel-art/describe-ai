@@ -37,6 +37,51 @@ AI_SEMAPHORE   = threading.Semaphore(10)   # 10 llamadas simultáneas máximo
 AI_MAX_WORKERS = 10                         # hilos por job de CSV
 AI_MODEL       = "meta-llama/llama-3.3-70b-instruct"
 
+# ── Pre-traducción de nombres de producto (evita confusión en el LLM) ─────────
+_TRAD_PT = {
+    "Taladro Inalámbrico": "Furadeira sem fio",
+    "Taladro":             "Furadeira",
+    "Martillo de Carpintero": "Martelo de carpinteiro",
+    "Martillo":            "Martelo",
+    "Cinta Métrica":       "Trena",
+    "Llave Inglesa Ajustable": "Chave inglesa ajustável",
+    "Llave Inglesa":       "Chave inglesa",
+    "Nivel de Burbuja":    "Nível de bolha",
+    "Parlante":            "Caixa de som",
+    "Bocina":              "Alto-falante",
+}
+_TRAD_FR = {
+    "Taladro Inalámbrico": "Perceuse sans fil",
+    "Taladro":             "Perceuse",
+    "Martillo de Carpintero": "Marteau de charpentier",
+    "Martillo":            "Marteau",
+    "Cinta Métrica":       "Mètre ruban",
+    "Llave Inglesa Ajustable": "Clé à molette ajustable",
+    "Llave Inglesa":       "Clé à molette",
+    "Nivel de Burbuja":    "Niveau à bulle",
+    "Parlante":            "Haut-parleur",
+    "Bocina":              "Haut-parleur",
+}
+_TRAD_EN = {
+    "Taladro Inalámbrico": "Cordless Drill",
+    "Taladro":             "Drill",
+    "Martillo de Carpintero": "Carpenter's Hammer",
+    "Martillo":            "Hammer",
+    "Cinta Métrica":       "Tape Measure",
+    "Llave Inglesa Ajustable": "Adjustable Wrench",
+    "Llave Inglesa":       "Wrench",
+    "Nivel de Burbuja":    "Spirit Level",
+    "Parlante":            "Speaker",
+    "Bocina":              "Speaker",
+}
+_TRAD_MAP = {"pt": _TRAD_PT, "fr": _TRAD_FR, "en": _TRAD_EN}
+
+def _traducir_nombre(nombre: str, idioma: str) -> str:
+    """Pre-traduce el nombre del producto antes de enviarlo al LLM."""
+    for es, trad in _TRAD_MAP.get(idioma, {}).items():
+        nombre = nombre.replace(es, trad)
+    return nombre
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH  = os.path.join(BASE_DIR, "codes.db")
 
@@ -659,37 +704,29 @@ Reglas de formato:
         if idioma == "pt":
             lang_extra = """
 
-PORTUGUESE TRANSLATION — APPLY SILENTLY WITHOUT MENTIONING IT:
-Translate the input data from Spanish to Brazilian Portuguese. Do NOT explain, comment or
-mention the translation process — just write the description directly in Portuguese.
-Apply these translations automatically and silently:
-  'Taladro Inalámbrico' → 'Furadeira sem fio'
-  'Martillo de Carpintero' → 'Martelo de carpinteiro'
-  'Cinta Métrica' → 'Trena'   |   'Llave Inglesa' → 'Chave inglesa'
-  'Nivel de Burbuja' → 'Nível de bolha'
-  'portabrocas' → 'mandril'   |   'maletín' → 'estojo'
+PORTUGUESE TRANSLATION — APPLY SILENTLY:
+Translate all Spanish words in the input to Brazilian Portuguese.
+Do NOT mention, explain or reference the translation — just write the description directly.
+Apply these translations automatically:
+  'portabrocas' → 'mandril'        |   'maletín' → 'estojo'
   'freno automático' → 'trava automática'
   'gancho magnético' → 'presilha magnética'
   'herramientas de medición' → 'ferramentas de medição'
   'herramientas de mano' → 'ferramentas manuais'
-  'longitud' → 'comprimento'  |   'aluminio' → 'alumínio'
-  'mango' → 'cabo'            |   'antideslizante' → 'antiderrapante'
-  'clavos' → 'pregos'         |   'uña' → 'garra'
+  'longitud' → 'comprimento'       |   'aluminio' → 'alumínio'
+  'mango' → 'cabo'                 |   'antideslizante' → 'antiderrapante'
+  'clavos' → 'pregos'              |   'uña' → 'garra'
   'resistente al agua' → 'resistente à água'
-  'sonido' → 'som'            |   'batería' → 'bateria'
-ZERO palavras em espanhol na saída. Escreva diretamente a descrição, sem comentários."""
+  'sonido' → 'som'                 |   'batería' → 'bateria'
+ZERO palavras em espanhol na saída."""
 
         if idioma == "fr":
             lang_extra = """
 
-FRENCH TRANSLATION — APPLY SILENTLY WITHOUT MENTIONING IT:
-Translate the input data from Spanish to French. Do NOT explain, comment or mention
-the translation process — just write the description directly in French.
-Apply these translations automatically and silently:
-  'Taladro Inalámbrico' → 'Perceuse sans fil'
-  'Martillo de Carpintero' → 'Marteau de charpentier'
-  'Cinta Métrica' → 'Mètre ruban'   |   'Llave Inglesa' → 'Clé à molette'
-  'Nivel de Burbuja' → 'Niveau à bulle'
+FRENCH TRANSLATION — APPLY SILENTLY:
+Translate all Spanish words in the input to French.
+Do NOT mention, explain or reference the translation — just write the description directly.
+Apply these translations automatically:
   'portabrocas' → 'mandrin'         |   'maletín' → 'mallette'
   'freno automático' → 'frein automatique'
   'gancho magnético' → 'crochet magnétique'
@@ -699,7 +736,7 @@ Apply these translations automatically and silently:
   'mango' → 'manche'                |   'antideslizante' → 'antidérapant'
   'clavos' → 'clous'                |   'uña curva' → 'griffe courbée'
   'burbuja' → 'bulle'               |   'resistente al agua' → 'résistant à l\'eau'
-ZERO mots en espagnol dans la sortie. Écrivez directement la description, sans commentaires.
+ZERO mots en espagnol dans la sortie.
 
 FRENCH GRAMMAR — GENDER AGREEMENT:
 Every noun, adjective and article must agree in gender and number.
@@ -719,10 +756,11 @@ The ONLY exception: proper brand names and model numbers (e.g. 'Bosch', 'Stanley
 Generic Spanish descriptive words in product names MUST be translated (e.g. 'Taladro' → drill/furadeira/perceuse).
 ZERO Spanish words are allowed in the output unless they are proper brand or model names.{lang_extra}"""
 
+        nombre_traducido = _traducir_nombre(producto.get('nombre', ''), idioma)
         user_prompt = f"""Write ONE product description in {lang_name} with a {tone_name} tone.
 
 Product:
-- Name: {producto.get('nombre', '')}
+- Name: {nombre_traducido}
 - Category: {producto.get('categoria', '')}
 - Features: {producto.get('caracteristicas', '')}
 
