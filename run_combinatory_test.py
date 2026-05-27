@@ -53,8 +53,11 @@ LOCALIZACIONES = {
         "lang_name": "Español (Argentina)",
         "instruccion": (
             "Escribí en español argentino con voseo natural (llevalo, tirás, es)."
-            " Usá estos términos y modismos: 'parlante', 'batería zarpada',"
-            " 'ideal para el asado o la previa'. El tono debe sonar como una tienda local argentina."
+            " Usá estos términos y modismos de forma NATURAL y CORRECTA:"
+            " 'parlante' (nunca speaker), 'batería zarpada' ('zarpada' es ADJETIVO, significa increíble/brutal — nunca lo uses como verbo),"
+            " 'ideal para el asado o la previa'."
+            " Ejemplo correcto: 'tiene una batería zarpada de 20 horas'."
+            " El tono debe sonar como una tienda local argentina."
         ),
     },
     "México": {

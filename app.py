@@ -651,6 +651,10 @@ Examples of correct gender: 'une tête en acier forgé' (feminine), 'un manche e
 Never mix genders (e.g. do NOT write 'un tête' or 'une manche').
 Apply this rule to ALL technical terms, materials and product categories."""
 
+        pt_extra = ""
+        if idioma == "pt":
+            pt_extra = "\nPORTUGUESE SPECIFIC RULE: ZERO palavras em espanhol são permitidas. Exemplos obrigatórios: 'sonido' → 'som', 'batería' → 'bateria', 'parlante' → 'caixa de som', 'resistente al agua' → 'resistente à água'."
+
         system_prompt = f"""You are an expert e-commerce copywriter. Your goal is to write highly persuasive,
 professional product descriptions in {lang_name}. Focus on the {tone_name} tone and
 highlight the product's key benefits naturally.
@@ -665,8 +669,14 @@ Examples of mandatory translation (Spanish → {lang_name}):
   - 'cabeza de acero forjado'    → must be fully translated
   - 'herramientas de construccion' → must be fully translated
   - 'suela amortiguada'          → must be fully translated
-The ONLY exception: the exact Brand Name or Model Name (e.g. 'TotalMax', 'Pro X').
-ZERO Spanish words are allowed in the output unless they are part of the product proper name.{french_rule}"""
+The ONLY exception: proper brand names and model numbers (e.g. 'JBL', 'Charge 4', 'Nike', 'TotalMax').
+Generic Spanish nouns MUST ALWAYS be translated, even when they appear in the product name.
+Examples of words that are NOT brand names and MUST be translated:
+  - 'Parlante' → speaker / haut-parleur / caixa de som
+  - 'Bocina'   → speaker / horn
+  - 'Silla'    → chair / chaise / cadeira
+  - 'Mesa'     → table / mesa (PT only) / table
+ZERO Spanish words are allowed in the output unless they are proper brand or model names.{pt_extra}{french_rule}"""
 
         user_prompt = f"""Write ONE product description in {lang_name} with a {tone_name} tone.
 
