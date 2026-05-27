@@ -718,6 +718,8 @@ Apply these translations automatically:
   'clavos' → 'pregos'              |   'uña' → 'garra'
   'resistente al agua' → 'resistente à água'
   'sonido' → 'som'                 |   'batería' → 'bateria'
+  'acero' → 'aço'                  |   'acabado' → 'acabamento'
+  'litio' → 'lítio'                |   'Profesional' → 'Profissional'
 ZERO palavras em espanhol na saída."""
 
         if idioma == "fr":
@@ -729,13 +731,19 @@ Do NOT mention, explain or reference the translation — just write the descript
 Apply these translations automatically:
   'portabrocas' → 'mandrin'         |   'maletín' → 'mallette'
   'freno automático' → 'frein automatique'
-  'gancho magnético' → 'crochet magnétique'
+  'gancho magnético' → 'crochet magnétique'  |  'gancho' → 'crochet'
   'herramientas de medición' → 'outils de mesure'
   'herramientas de mano' → 'outils à main'
   'longitud' → 'longueur'           |   'aluminio' → 'aluminium'
   'mango' → 'manche'                |   'antideslizante' → 'antidérapant'
   'clavos' → 'clous'                |   'uña curva' → 'griffe courbée'
   'burbuja' → 'bulle'               |   'resistente al agua' → 'résistant à l\'eau'
+  'peso' → 'poids'                  |   'cinta' → 'ruban'
+  'motor' → 'moteur'                |   'cromado' → 'chromé'
+  'acabado' → 'finition'            |   'litio' → 'lithium'
+  'metros' → 'mètres'               |   'Profesional' → 'Professionnel'
+  'velocidad variable' → 'vitesse variable'
+  'resistente a las caídas' → 'résistant aux chutes'
 ZERO mots en espagnol dans la sortie.
 
 FRENCH GRAMMAR — GENDER AGREEMENT:
@@ -797,6 +805,44 @@ Format rules:
             result = response.choices[0].message.content.strip()
             # Fix tags HTML rotos: <b-Palabra → <b>Palabra
             result = re.sub(r'<b-', '<b>', result)
+
+            # ── Post-procesamiento: elimina palabras españolas residuales ──────
+            if idioma == "pt":
+                for _es, _pt in [
+                    ("mango",       "cabo"),
+                    ("acero",       "aço"),
+                    ("acabado",     "acabamento"),
+                    ("batería",     "bateria"),
+                    ("litio",       "lítio"),
+                    ("eléctricas",  "elétricas"),
+                    ("Profesional", "Profissional"),
+                    ("profesional", "profissional"),
+                ]:
+                    result = result.replace(_es, _pt)
+            elif idioma == "fr":
+                result = re.sub(r'\blithiu\b', 'lithium', result)  # typo del modelo
+                result = re.sub(r'ergon[oó]mico', 'ergonomique', result, flags=re.IGNORECASE)
+                result = re.sub(
+                    r'[Rr]esistente? [aà] las ca[ií]das', 'résistant aux chutes', result
+                )
+                for _es, _fr in [
+                    ("peso",        "poids"),
+                    ("cinta",       "ruban"),
+                    ("gancho",      "crochet"),
+                    ("mango",       "manche"),
+                    ("motor",       "moteur"),
+                    ("vélocité",    "vitesse"),
+                    ("cromado",     "chromé"),
+                    ("acabado",     "finition"),
+                    ("litio",       "lithium"),
+                    ("maletín",     "mallette"),
+                    ("metros",      "mètres"),
+                    ("Profesional", "Professionnel"),
+                    ("profesional", "professionnel"),
+                ]:
+                    result = result.replace(_es, _fr)
+            # ──────────────────────────────────────────────────────────────────
+
             logger.info(f"[AI] OK '{nombre}' en intento {intento + 1}")
             return result
 
