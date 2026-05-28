@@ -7,6 +7,15 @@
   <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
   <title>DescribeAI — Descripciones de producto con IA</title>
   <meta name="description" content="Generá cientos de descripciones de producto SEO optimizadas con IA en minutos. Powered by Llama 3." />
+  <!-- Open Graph (para compartir en WhatsApp, redes, etc.) -->
+  <meta property="og:title" content="DescribeAI — Descripciones de producto con IA" />
+  <meta property="og:description" content="Subí tu CSV y recibí descripciones SEO optimizadas para toda tu tienda en minutos. Probalo gratis." />
+  <meta property="og:url" content="https://describeai.store" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://describeai.store/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="DescribeAI — Descripciones de producto con IA" />
+  <meta name="twitter:description" content="IA que genera descripciones SEO para tu tienda. Probalo gratis." />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -38,6 +47,11 @@
     .faq-answer.open { max-height: 300px; }
     .toggle-btn.argentina { background: #3b7af5; }
     .toggle-btn.internacional { background: #374151; }
+    .platform-logo {
+      filter: grayscale(1) brightness(1.8); opacity: 0.45;
+      transition: filter 0.2s, opacity 0.2s;
+    }
+    .platform-logo:hover { filter: grayscale(0); opacity: 1; }
   </style>
 </head>
 <body class="text-gray-100 font-sans antialiased">
@@ -134,6 +148,21 @@
     </div>
   </section>
 
+  <!-- PLATAFORMAS COMPATIBLES -->
+  <section class="py-10 px-6 border-y border-white/5">
+    <div class="max-w-4xl mx-auto text-center">
+      <p class="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-7">Compatible con las principales plataformas</p>
+      <div class="flex flex-wrap items-center justify-center gap-8 md:gap-12">
+        <span class="text-gray-300 font-bold text-lg platform-logo" title="Shopify">Shopify</span>
+        <span class="text-gray-300 font-bold text-lg platform-logo" title="WooCommerce">WooCommerce</span>
+        <span class="text-gray-300 font-bold text-lg platform-logo" title="MercadoLibre">MercadoLibre</span>
+        <span class="text-gray-300 font-bold text-lg platform-logo" title="Tiendanube">Tiendanube</span>
+        <span class="text-gray-300 font-bold text-lg platform-logo" title="Etsy">Etsy</span>
+        <span class="text-gray-300 font-bold text-lg platform-logo" title="Amazon">Amazon</span>
+      </div>
+    </div>
+  </section>
+
   <!-- BENEFICIOS -->
   <section class="py-24 px-6 bg-white/[0.01]">
     <div class="max-w-5xl mx-auto">
@@ -177,6 +206,45 @@
           <div class="text-3xl mb-4">🎯</div>
           <h3 class="font-bold text-lg mb-2">Tono personalizable</h3>
           <p class="text-gray-400 text-sm">Profesional, amigable, lujoso, técnico. Cada descripción habla el idioma de tu marca.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIOS -->
+  <section class="py-20 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl sm:text-4xl font-black mb-3">Lo que dicen nuestros clientes</h2>
+        <p class="text-gray-400">Resultados reales de vendedores reales.</p>
+      </div>
+      <div class="grid md:grid-cols-2 gap-6">
+
+        <div class="bg-white/[0.03] border border-white/8 rounded-2xl p-7 card-glow flex flex-col gap-4">
+          <div class="flex gap-1 text-yellow-400 text-lg">★★★★★</div>
+          <p class="text-gray-300 text-sm leading-relaxed italic">
+            "Excelente servicio. Las descripciones quedaron muy profesionales y el tiempo de entrega fue increíble. Lo recomiendo totalmente para cualquier tienda online."
+          </p>
+          <div class="flex items-center gap-3 mt-auto pt-2 border-t border-white/5">
+            <div class="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm">J</div>
+            <div>
+              <div class="text-sm font-semibold text-white">Jonathan M.</div>
+              <div class="text-xs text-gray-500">Cliente verificado · Fiverr ⭐ 5/5</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white/[0.03] border border-blue-500/20 rounded-2xl p-7 flex flex-col justify-between">
+          <div class="text-5xl text-blue-400/30 font-black leading-none mb-4">"</div>
+          <p class="text-gray-300 text-sm leading-relaxed">
+            Más de <strong class="text-white">+1.000 productos procesados</strong>. Vendedores de Shopify, MercadoLibre, Tiendanube y más confían en DescribeAI para escalar su catálogo sin perder horas escribiendo.
+          </p>
+          <div class="mt-6">
+            <a href="#precios" class="inline-block btn-electric text-white text-sm font-bold px-6 py-2.5 rounded-lg">
+              Empezar ahora →
+            </a>
+          </div>
         </div>
 
       </div>
@@ -346,20 +414,66 @@
 
       <!-- Planes Internacional -->
       <div id="planesINT" class="hidden">
-        <div class="max-w-xl mx-auto bg-white/[0.03] border border-white/8 rounded-2xl p-10 text-center">
-          <div class="text-5xl mb-5">🌍</div>
-          <h3 class="text-2xl font-black mb-3">International Orders</h3>
-          <p class="text-gray-400 mb-8 leading-relaxed">
-            For clients outside Argentina, place your order directly through
-            <strong class="text-white">Fiverr</strong>. Secure payment in USD
-            with buyer protection.
-          </p>
-          <a href="https://www.fiverr.com/users/emanuelspadoni" target="_blank"
-            class="inline-block btn-electric text-white font-bold px-10 py-4 rounded-xl text-lg">
-            Order on Fiverr →
-          </a>
-          <p class="text-xs text-gray-600 mt-6">Secure checkout · USD pricing · Fiverr guarantee</p>
+        <div class="grid md:grid-cols-3 gap-6">
+
+          <!-- BASIC INT -->
+          <div class="bg-white/[0.03] border border-white/8 rounded-2xl p-8 card-glow transition-all flex flex-col">
+            <div class="text-blue-400 text-xs font-bold uppercase tracking-widest mb-4">Starter</div>
+            <div class="text-4xl font-black mb-1">$5 <span class="text-lg font-normal text-gray-400">USD</span></div>
+            <div class="text-gray-500 text-sm mb-6">one-time payment</div>
+            <ul class="space-y-3 text-sm text-gray-300 mb-8 flex-1">
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> Up to <strong>50 products</strong></li>
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> Powered by <strong>Llama 3</strong></li>
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> All languages</li>
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> Custom tone</li>
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> No expiry</li>
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> CSV delivered by email</li>
+            </ul>
+            <a href="https://www.fiverr.com/users/emanuelspadoni" target="_blank" class="btn-electric w-full py-3.5 rounded-xl font-bold text-white text-center block">
+              Order on Fiverr →
+            </a>
+          </div>
+
+          <!-- STANDARD INT (popular) -->
+          <div class="plan-popular border border-blue-500/40 rounded-2xl p-8 card-glow transition-all flex flex-col relative">
+            <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs font-bold px-4 py-1 rounded-full">MOST POPULAR</div>
+            <div class="text-blue-300 text-xs font-bold uppercase tracking-widest mb-4">Growth</div>
+            <div class="text-4xl font-black mb-1">$35 <span class="text-lg font-normal text-gray-400">USD</span></div>
+            <div class="text-gray-400 text-sm mb-6">one-time payment</div>
+            <ul class="space-y-3 text-sm text-gray-200 mb-8 flex-1">
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> Up to <strong>200 products</strong></li>
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> Powered by <strong>Llama 3</strong></li>
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> All languages</li>
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> Custom tone</li>
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> No expiry</li>
+              <li class="flex items-center gap-2"><span class="text-blue-400">✓</span> CSV delivered by email</li>
+            </ul>
+            <a href="https://www.fiverr.com/users/emanuelspadoni" target="_blank" class="btn-electric w-full py-3.5 rounded-xl font-bold text-white text-center block">
+              Order on Fiverr →
+            </a>
+          </div>
+
+          <!-- PREMIUM INT -->
+          <div class="bg-white/[0.03] border border-white/8 rounded-2xl p-8 card-glow transition-all flex flex-col">
+            <div class="text-violet-400 text-xs font-bold uppercase tracking-widest mb-4">Corporate</div>
+            <div class="text-4xl font-black mb-1">$90 <span class="text-lg font-normal text-gray-400">USD</span></div>
+            <div class="text-gray-500 text-sm mb-6">one-time payment</div>
+            <ul class="space-y-3 text-sm text-gray-300 mb-8 flex-1">
+              <li class="flex items-center gap-2"><span class="text-violet-400">✓</span> Up to <strong>1,000 products</strong></li>
+              <li class="flex items-center gap-2"><span class="text-violet-400">✓</span> Powered by <strong>Llama 3</strong></li>
+              <li class="flex items-center gap-2"><span class="text-violet-400">✓</span> All languages</li>
+              <li class="flex items-center gap-2"><span class="text-violet-400">✓</span> Custom tone</li>
+              <li class="flex items-center gap-2"><span class="text-violet-400">✓</span> No expiry</li>
+              <li class="flex items-center gap-2"><span class="text-violet-400">✓</span> CSV delivered by email</li>
+              <li class="flex items-center gap-2"><span class="text-violet-400">⭐</span> <strong>Priority Support</strong></li>
+            </ul>
+            <a href="https://www.fiverr.com/users/emanuelspadoni" target="_blank" class="w-full py-3.5 rounded-xl font-bold text-white border border-violet-500/50 hover:bg-violet-500/10 transition text-center block">
+              Order on Fiverr →
+            </a>
+          </div>
+
         </div>
+        <p class="text-center text-xs text-gray-600 mt-6">Secure checkout · USD pricing · Fiverr buyer protection</p>
       </div>
 
       <!-- Error de pago -->
