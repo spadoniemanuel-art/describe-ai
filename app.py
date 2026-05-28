@@ -784,7 +784,7 @@ Format rules:
                         {"role": "system", "content": system_prompt},
                         {"role": "user",   "content": user_prompt},
                     ],
-                    max_tokens=250,
+                    max_tokens=300,
                     temperature=0.7,
                 )
             result = response.choices[0].message.content.strip()
