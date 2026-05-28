@@ -647,34 +647,16 @@ def generar_descripcion(producto: dict, tono: str, idioma: str,
 
     if idioma == "es":
         # Español: localización regional completa
-        regla_tono = ""
-        if tono in ("tecnico", "profesional"):
-            regla_tono = """
+        system_prompt = f"""Sos un redactor profesional de e-commerce nativo de {pais_destino}.
+Escribí en español con vocabulario natural de esa región
+(ej: 'bocina' en México, 'parlante' en Argentina, 'altavoz' en España).
 
-REGLA DE TONO TECNICO — OBLIGATORIA:
-- El tono seleccionado es tecnico/profesional. Esto tiene prioridad sobre cualquier localizacion regional.
-- PROHIBIDO usar expresiones coloquiales, jerga informal o modismos aunque el pais de destino sea informal.
-- El vocabulario debe ser preciso, objetivo y orientado a especificaciones tecnicas y beneficios concretos.
-- Si corresponde usar terminos regionales (ej: 'parlante' en Argentina), usarlos, pero sin jerga ni expresiones de la calle."""
-
-        system_prompt = f"""Actua como un experto copywriter de e-commerce local. Tu objetivo es redactar descripciones altamente vendedoras, persuasivas y profesionales para el mercado de un pais especifico.
-
-REGLA CRITICA DE IDIOMA:
-- La salida DEBE estar 100% en espanol. Cero palabras en ingles, portugues u otro idioma.
-- Esto incluye terminos tecnicos, categorias y caracteristicas del producto.
-
-REGLA CRITICA DE LOCALIZACION LINGUISTICA:
-- El pais de destino de este producto es: {pais_destino}.
-- Debes adaptar de forma organica y natural todo el vocabulario, nombres de prendas, modismos comerciales y giros linguisticos al espanol nativo de ese pais especifico.
-- Ejemplos de adaptacion automatica segun el pais recibido:
-  * Si es 'Argentina' o 'Uruguay': usa voseo sutil y terminos como remera, campera, zapatillas, parlante.
-  * Si es 'Mexico': usa playera, chamarra, tenis, bocina.
-  * Si es 'Chile': usa polera, chaqueta, zapatillas.
-  * Si es 'Peru': usa polo, casaca, zapatillas.
-  * Si es 'Colombia': usa camiseta, chaqueta, tenis, parlante.
-  * Si es 'Espana': usa camiseta, chaqueta, zapatillas, ordenador, altavoz.
-  * Si es 'Neutro': mantene un espanol latinoamericano estandar, neutro, profesional y libre de localismos.
-- IMPORTANTE: No exageres usando jerga callejera o vulgar. El tono debe ser el de una tienda de e-commerce profesional, confiable y nativa de ese pais.{regla_tono}"""
+Reglas estrictas:
+- TODO el texto debe estar en español, sin mezclar palabras de otros idiomas
+- Tono {tono}: si es Profesional/Técnico, NUNCA usar jerga callejera ni modismos exagerados
+- Los tags HTML <b> deben estar bien formados, nunca <b-
+- Máximo 100 palabras
+- Incluir keywords en <b>negrita</b>"""
 
         user_prompt = f"""Genera UNA descripcion de producto en tono {tono} para el mercado de {pais_destino}.
 Idioma: espanol (unicamente)
@@ -751,18 +733,21 @@ Every noun, adjective and article must agree in gender and number.
 Examples: 'une tête en acier forgé' (fém.), 'un manche en fibre de verre' (masc.).
 Never write 'un tête' or 'une manche'."""
 
-        system_prompt = f"""You are an expert e-commerce copywriter. Your goal is to write highly persuasive,
-professional product descriptions in {lang_name}. Focus on the {tone_name} tone and
-highlight the product's key benefits naturally.
+        # País de referencia para idiomas sin localización regional
+        pais_map_intl = {"en": "Estados Unidos", "pt": "Brasil", "fr": "Francia"}
+        pais_ref = pais_destino if pais_destino not in ("Neutro", "") else pais_map_intl.get(idioma, idioma)
 
-CRITICAL TRANSLATION RULE — STRICTLY ENFORCED:
-Your task is to translate and adapt ALL content to {lang_name}.
-This rule applies to EVERY tone, including fun, friendly or playful ones.
-You MUST translate every single word: technical terms, materials, categories,
-features and characteristics — even when they appear in Spanish in the source data.
-The ONLY exception: proper brand names and model numbers (e.g. 'Bosch', 'Stanley', '18V', '20oz').
-Generic Spanish descriptive words in product names MUST be translated (e.g. 'Taladro' → drill/furadeira/perceuse).
-ZERO Spanish words are allowed in the output unless they are proper brand or model names.{lang_extra}"""
+        system_prompt = f"""Sos un redactor profesional de e-commerce nativo de {pais_ref}.
+Escribí en {lang_name} con vocabulario natural de esa región
+(ej: 'bocina' en México, 'parlante' en Argentina, 'alto-falante' en Brasil).
+
+Reglas estrictas:
+- TODO el texto debe estar en {lang_name}, sin mezclar palabras de otros idiomas
+- Traducir también el nombre del producto al {lang_name}
+- Tono {tone_name}: si es Profesional/Técnico, NUNCA usar jerga callejera ni modismos exagerados
+- Los tags HTML <b> deben estar bien formados, nunca <b-
+- Máximo 100 palabras
+- Incluir keywords en <b>negrita</b>{lang_extra}"""
 
         nombre_traducido = _traducir_nombre(producto.get('nombre', ''), idioma)
         user_prompt = f"""Write ONE product description in {lang_name} with a {tone_name} tone.
