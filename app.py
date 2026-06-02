@@ -83,7 +83,11 @@ def _traducir_nombre(nombre: str, idioma: str) -> str:
     return nombre
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH  = os.path.join(BASE_DIR, "codes.db")
+# En Railway: configurar variable de entorno DATABASE_PATH=/data/codes.db
+# y montar un volumen en /data para persistencia entre deploys.
+# Si no se configura, usa el directorio local (modo desarrollo).
+DB_PATH = os.getenv("DATABASE_PATH", os.path.join(BASE_DIR, "codes.db"))
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 OPENROUTER_KEY  = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
@@ -225,6 +229,55 @@ async def admin_login(response: Response, request: Request):
 async def admin_logout(response: Response):
     response.delete_cookie("admin_session")
     return RedirectResponse("/admin", status_code=302)
+
+
+@app.get("/admin/stats")
+async def admin_stats(key: str = ""):
+    """Endpoint de estadísticas. Requiere ?key=ADMIN_PASSWORD"""
+    if key != ADMIN_PASSWORD:
+        return JSONResponse({"error": "No autorizado"}, status_code=401)
+    con = sqlite3.connect(DB_PATH)
+    try:
+        # Pruebas gratis
+        trials = con.execute(
+            "SELECT ip, created_at FROM free_trials ORDER BY rowid DESC"
+        ).fetchall()
+
+        # Códigos por plan
+        codes_summary = con.execute("""
+            SELECT plan,
+                   COUNT(*) as total,
+                   SUM(CASE WHEN used=1 THEN 1 ELSE 0 END) as usados
+            FROM codes
+            GROUP BY plan
+        """).fetchall()
+
+        # Últimos 10 usos de códigos
+        recent_uses = con.execute("""
+            SELECT code, plan, used_at
+            FROM codes
+            WHERE used=1
+            ORDER BY used_at DESC
+            LIMIT 10
+        """).fetchall()
+
+    finally:
+        con.close()
+
+    return {
+        "pruebas_gratis": {
+            "total": len(trials),
+            "ips": [{"ip": r[0], "fecha": r[1]} for r in trials],
+        },
+        "codigos": [
+            {"plan": r[0], "total": r[1], "usados": r[2], "disponibles": r[1] - r[2]}
+            for r in codes_summary
+        ],
+        "ultimos_usos": [
+            {"codigo": r[0], "plan": r[1], "fecha": r[2]}
+            for r in recent_uses
+        ],
+    }
 
 
 # ── MercadoPago ────────────────────────────────────────────────────────────────
